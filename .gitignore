@@ -37,6 +37,10 @@ yarn-error.log*
 # vercel
 .vercel
 
+# data imports — real business/client data, never committed
+/data/
+.import-reports/
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
