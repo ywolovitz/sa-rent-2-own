@@ -20,6 +20,7 @@
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { createClient } from "@supabase/supabase-js";
 import xlsx from "xlsx";
+import WebSocket from "ws";
 
 const DRY_RUN = process.argv.includes("--dry-run");
 const WORKBOOK_PATH = process.argv[2]?.startsWith("--")
@@ -38,7 +39,14 @@ if (!DRY_RUN && (!SUPABASE_URL || !SERVICE_ROLE_KEY)) {
 
 const supabase =
   !DRY_RUN && SUPABASE_URL && SERVICE_ROLE_KEY
-    ? createClient(SUPABASE_URL, SERVICE_ROLE_KEY, { auth: { persistSession: false } })
+    ? createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
+        auth: { persistSession: false },
+        // supabase-js eagerly constructs a realtime client, which needs a
+        // global WebSocket that Node < 22 doesn't provide. This script
+        // never uses realtime features — the polyfill just satisfies the
+        // constructor so plain REST inserts below can run.
+        realtime: { transport: WebSocket },
+      })
     : null;
 
 // ---------------------------------------------------------------------------
