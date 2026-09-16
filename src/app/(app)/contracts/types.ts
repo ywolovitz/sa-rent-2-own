@@ -6,20 +6,6 @@ import type {
   PaymentMethod,
 } from "@/lib/database.types";
 
-export interface ContractListItem {
-  id: string;
-  vehicle_id: string;
-  client_id: string;
-  contract_type: ContractType;
-  status: ContractStatus;
-  start_date: string;
-  end_date: string | null;
-  installment_amount: number | null;
-  arrears_amount: number;
-  vehicle_label: string;
-  client_name: string;
-}
-
 export interface ContractWithDetails {
   id: string;
   vehicle_id: string;
@@ -44,6 +30,11 @@ export interface ContractWithDetails {
     billing_direction: BillingDirection;
     billing_frequency: BillingFrequency;
   } | null;
+}
+
+export interface ContractRow extends ContractWithDetails {
+  vehicleLabel: string;
+  clientName: string;
 }
 
 export interface SelectableVehicle {

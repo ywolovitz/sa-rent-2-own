@@ -1,42 +1,9 @@
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/auth/current-profile";
-import { Badge } from "@/components/ui/badge";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 
 import { VehiclePanel } from "./vehicle-panel";
-import { DeleteVehicleButton } from "./delete-vehicle-button";
+import { VehiclesTable } from "./vehicles-table";
 import type { VehicleWithRegistration } from "./types";
-import type { VehicleStatus } from "@/lib/database.types";
-
-const STATUS_VARIANT: Record<
-  VehicleStatus,
-  "default" | "secondary" | "destructive" | "warning" | "success" | "outline"
-> = {
-  available: "secondary",
-  on_road: "success",
-  parked: "outline",
-  in_repair: "warning",
-  for_sale: "default",
-  sold: "secondary",
-  written_off: "destructive",
-};
-
-const STATUS_LABELS: Record<VehicleStatus, string> = {
-  available: "Available",
-  on_road: "On road",
-  parked: "Parked",
-  in_repair: "In repair",
-  for_sale: "For sale",
-  sold: "Sold",
-  written_off: "Written off",
-};
 
 export default async function VehiclesPage() {
   const [profile, supabase] = await Promise.all([getCurrentProfile(), createClient()]);
@@ -88,60 +55,11 @@ export default async function VehiclesPage() {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Vehicles</h1>
-          <p className="text-muted-foreground text-sm">{rows.length} in the fleet</p>
-        </div>
+        <h1 className="text-2xl font-semibold tracking-tight">Vehicles</h1>
         {canManage && <VehiclePanel />}
       </div>
 
-      <div className="rounded-lg border bg-background">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Reg</TableHead>
-              <TableHead>Model</TableHead>
-              <TableHead>Status</TableHead>
-              {canManage && <TableHead>Client</TableHead>}
-              <TableHead>Next service</TableHead>
-              {canManage && <TableHead className="w-24" />}
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {rows.map((vehicle) => (
-              <TableRow key={vehicle.id}>
-                <TableCell className="font-medium">{vehicle.current_plate ?? "—"}</TableCell>
-                <TableCell>
-                  {[vehicle.year, vehicle.make, vehicle.model].filter(Boolean).join(" ") || "—"}
-                </TableCell>
-                <TableCell>
-                  <Badge variant={STATUS_VARIANT[vehicle.status]}>
-                    {STATUS_LABELS[vehicle.status]}
-                  </Badge>
-                </TableCell>
-                {canManage && <TableCell>{vehicle.current_client_name ?? "—"}</TableCell>}
-                <TableCell>{vehicle.next_service_date ?? "—"}</TableCell>
-                {canManage && (
-                  <TableCell className="flex items-center justify-end gap-1">
-                    <VehiclePanel vehicle={vehicle} canManage={canManage} />
-                    <DeleteVehicleButton
-                      vehicleId={vehicle.id}
-                      label={vehicle.current_plate ?? vehicle.file_no}
-                    />
-                  </TableCell>
-                )}
-              </TableRow>
-            ))}
-            {rows.length === 0 && (
-              <TableRow>
-                <TableCell colSpan={6} className="text-muted-foreground text-center py-8">
-                  No vehicles yet.
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
-      </div>
+      <VehiclesTable rows={rows} canManage={canManage} />
     </div>
   );
 }
