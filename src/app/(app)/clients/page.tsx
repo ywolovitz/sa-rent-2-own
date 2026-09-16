@@ -14,7 +14,7 @@ import {
 import { formatSaPhoneForDisplay } from "@/lib/phone";
 import type { BankAccountType } from "@/lib/database.types";
 
-import { ClientDialog } from "./client-dialog";
+import { ClientPanel } from "./client-panel";
 import { DeleteClientButton } from "./delete-client-button";
 import type { ClientWithBanking } from "./types";
 
@@ -71,7 +71,7 @@ export default async function ClientsPage() {
           <h1 className="text-2xl font-semibold tracking-tight">Clients</h1>
           <p className="text-muted-foreground text-sm">{rows.length} on record</p>
         </div>
-        <ClientDialog />
+        <ClientPanel />
       </div>
 
       <div className="rounded-lg border bg-background">
@@ -101,7 +101,7 @@ export default async function ClientsPage() {
                   )}
                 </TableCell>
                 <TableCell className="flex items-center justify-end gap-1">
-                  <ClientDialog client={client} />
+                  <ClientPanel client={client} />
                   <DeleteClientButton clientId={client.id} label={client.full_name} />
                 </TableCell>
               </TableRow>

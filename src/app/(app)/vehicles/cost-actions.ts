@@ -1,0 +1,121 @@
+"use server";
+
+import { revalidatePath } from "next/cache";
+
+import { createClient as createSupabaseServerClient } from "@/lib/supabase/server";
+import { getCurrentProfile } from "@/lib/auth/current-profile";
+import { vehicleCostFormSchema, type VehicleCost } from "./costs-schema";
+
+export interface ActionResult {
+  error?: string;
+}
+
+const INVOICE_BUCKET = "vehicle-invoices";
+
+export async function listVehicleCosts(
+  vehicleId: string
+): Promise<{ data?: VehicleCost[]; error?: string }> {
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("vehicle_costs")
+    .select("id, cost_type, cost_date, supplier, amount, mileage_at_time, invoice_file_path, notes")
+    .eq("vehicle_id", vehicleId)
+    .order("cost_date", { ascending: false });
+
+  if (error) return { error: "Couldn't load cost history" };
+  return { data: data ?? [] };
+}
+
+export async function createVehicleCost(
+  vehicleId: string,
+  formData: FormData
+): Promise<ActionResult> {
+  const profile = await getCurrentProfile();
+  if (!profile) return { error: "Not authorized" };
+
+  const parsed = vehicleCostFormSchema.safeParse({
+    costType: formData.get("costType"),
+    costDate: formData.get("costDate"),
+    supplier: formData.get("supplier") || undefined,
+    amount: formData.get("amount"),
+    mileageAtTime: formData.get("mileageAtTime") || undefined,
+    notes: formData.get("notes") || undefined,
+  });
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "Invalid input" };
+  }
+  const values = parsed.data;
+  const amount = Number(values.amount);
+  if (!Number.isFinite(amount)) {
+    return { error: "Amount must be a number" };
+  }
+
+  const supabase = await createSupabaseServerClient();
+
+  let invoiceFilePath: string | null = null;
+  const file = formData.get("invoice");
+  if (file instanceof File && file.size > 0) {
+    const safeName = file.name.replace(/[^a-zA-Z0-9.\-_]/g, "_");
+    const path = `${vehicleId}/${Date.now()}-${safeName}`;
+    const { error: uploadError } = await supabase.storage
+      .from(INVOICE_BUCKET)
+      .upload(path, file, { contentType: file.type || "application/pdf" });
+    if (uploadError) {
+      return { error: `Couldn't upload invoice: ${uploadError.message}` };
+    }
+    invoiceFilePath = path;
+  }
+
+  const { error } = await supabase.from("vehicle_costs").insert({
+    vehicle_id: vehicleId,
+    cost_type: values.costType,
+    cost_date: values.costDate,
+    supplier: values.supplier || null,
+    amount,
+    mileage_at_time: values.mileageAtTime ? Number(values.mileageAtTime) : null,
+    invoice_file_path: invoiceFilePath,
+    notes: values.notes || null,
+    recorded_by: profile.id,
+  });
+
+  if (error) {
+    return { error: "Couldn't save the cost entry" };
+  }
+
+  revalidatePath("/vehicles");
+  return {};
+}
+
+export async function deleteVehicleCost(costId: string): Promise<ActionResult> {
+  const supabase = await createSupabaseServerClient();
+
+  const { data: cost } = await supabase
+    .from("vehicle_costs")
+    .select("invoice_file_path")
+    .eq("id", costId)
+    .maybeSingle();
+
+  const { error } = await supabase.from("vehicle_costs").delete().eq("id", costId);
+  if (error) {
+    return { error: "Couldn't delete the cost entry" };
+  }
+
+  if (cost?.invoice_file_path) {
+    await supabase.storage.from(INVOICE_BUCKET).remove([cost.invoice_file_path]);
+  }
+
+  revalidatePath("/vehicles");
+  return {};
+}
+
+export async function getInvoiceUrl(
+  filePath: string
+): Promise<{ url?: string; error?: string }> {
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase.storage
+    .from(INVOICE_BUCKET)
+    .createSignedUrl(filePath, 60);
+
+  if (error || !data) return { error: "Couldn't open the invoice" };
+  return { url: data.signedUrl };
+}

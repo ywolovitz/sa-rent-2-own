@@ -10,7 +10,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 
-import { VehicleDialog } from "./vehicle-dialog";
+import { VehiclePanel } from "./vehicle-panel";
 import { DeleteVehicleButton } from "./delete-vehicle-button";
 import type { VehicleWithRegistration } from "./types";
 import type { VehicleStatus } from "@/lib/database.types";
@@ -92,7 +92,7 @@ export default async function VehiclesPage() {
           <h1 className="text-2xl font-semibold tracking-tight">Vehicles</h1>
           <p className="text-muted-foreground text-sm">{rows.length} in the fleet</p>
         </div>
-        {canManage && <VehicleDialog />}
+        {canManage && <VehiclePanel />}
       </div>
 
       <div className="rounded-lg border bg-background">
@@ -123,7 +123,7 @@ export default async function VehiclesPage() {
                 <TableCell>{vehicle.next_service_date ?? "—"}</TableCell>
                 {canManage && (
                   <TableCell className="flex items-center justify-end gap-1">
-                    <VehicleDialog vehicle={vehicle} />
+                    <VehiclePanel vehicle={vehicle} canManage={canManage} />
                     <DeleteVehicleButton
                       vehicleId={vehicle.id}
                       label={vehicle.current_plate ?? vehicle.file_no}

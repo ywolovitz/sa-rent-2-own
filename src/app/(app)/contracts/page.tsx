@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/table";
 import type { ContractStatus } from "@/lib/database.types";
 
-import { ContractDialog } from "./contract-dialog";
+import { ContractPanel } from "./contract-panel";
 import { DeleteContractButton } from "./delete-contract-button";
 import type { ContractWithDetails, SelectableClient, SelectableVehicle } from "./types";
 
@@ -98,7 +98,7 @@ export default async function ContractsPage() {
           <h1 className="text-2xl font-semibold tracking-tight">Contracts</h1>
           <p className="text-muted-foreground text-sm">{rows.length} on record</p>
         </div>
-        <ContractDialog vehicles={selectableVehicles} clients={selectableClients} />
+        <ContractPanel vehicles={selectableVehicles} clients={selectableClients} />
       </div>
 
       <div className="rounded-lg border bg-background">
@@ -159,7 +159,7 @@ export default async function ContractsPage() {
                   </TableCell>
                   <TableCell>{row.end_date ?? "—"}</TableCell>
                   <TableCell className="flex items-center justify-end gap-1">
-                    <ContractDialog
+                    <ContractPanel
                       contract={contractDetails}
                       vehicles={selectableVehicles}
                       clients={selectableClients}

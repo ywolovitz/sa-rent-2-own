@@ -8,13 +8,14 @@ import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
+  Sheet,
+  SheetBody,
+  SheetContent,
+  SheetFooter,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet";
 import {
   Form,
   FormControl,
@@ -100,7 +101,7 @@ function RevealedBanking({ clientId }: { clientId: string }) {
   );
 }
 
-export function ClientDialog({ client }: { client?: ClientWithBanking }) {
+export function ClientPanel({ client }: { client?: ClientWithBanking }) {
   const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
   const isEditing = Boolean(client);
@@ -128,14 +129,14 @@ export function ClientDialog({ client }: { client?: ClientWithBanking }) {
   }
 
   return (
-    <Dialog
+    <Sheet
       open={open}
       onOpenChange={(next) => {
         setOpen(next);
         if (next) form.reset(toFormValues(client));
       }}
     >
-      <DialogTrigger asChild>
+      <SheetTrigger asChild>
         {isEditing ? (
           <Button variant="ghost" size="sm">
             Edit
@@ -146,13 +147,14 @@ export function ClientDialog({ client }: { client?: ClientWithBanking }) {
             Add client
           </Button>
         )}
-      </DialogTrigger>
-      <DialogContent className="sm:max-w-xl">
-        <DialogHeader>
-          <DialogTitle>{isEditing ? "Edit client" : "Add client"}</DialogTitle>
-        </DialogHeader>
+      </SheetTrigger>
+      <SheetContent>
+        <SheetHeader>
+          <SheetTitle>{isEditing ? "Edit client" : "Add client"}</SheetTitle>
+        </SheetHeader>
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col gap-6">
+          <form id="client-form" onSubmit={form.handleSubmit(onSubmit)} className="contents">
+            <SheetBody>
             <section className="grid gap-4 sm:grid-cols-2">
               <h3 className="text-muted-foreground col-span-full text-xs font-semibold tracking-wide uppercase">
                 Client
@@ -345,14 +347,15 @@ export function ClientDialog({ client }: { client?: ClientWithBanking }) {
               />
             </section>
 
-            <DialogFooter>
-              <Button type="submit" disabled={isPending}>
-                {isPending ? "Saving…" : "Save"}
-              </Button>
-            </DialogFooter>
+            </SheetBody>
           </form>
         </Form>
-      </DialogContent>
-    </Dialog>
+        <SheetFooter>
+          <Button type="submit" form="client-form" disabled={isPending}>
+            {isPending ? "Saving…" : "Save"}
+          </Button>
+        </SheetFooter>
+      </SheetContent>
+    </Sheet>
   );
 }

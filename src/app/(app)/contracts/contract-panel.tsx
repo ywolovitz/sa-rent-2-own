@@ -9,13 +9,14 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
+  Sheet,
+  SheetBody,
+  SheetContent,
+  SheetFooter,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet";
 import {
   Form,
   FormControl,
@@ -104,7 +105,7 @@ function toFormValues(contract?: ContractWithDetails): ContractFormValues {
   };
 }
 
-export function ContractDialog({
+export function ContractPanel({
   contract,
   vehicles,
   clients,
@@ -153,14 +154,14 @@ export function ContractDialog({
       : clients;
 
   return (
-    <Dialog
+    <Sheet
       open={open}
       onOpenChange={(next) => {
         setOpen(next);
         if (next) form.reset(toFormValues(contract));
       }}
     >
-      <DialogTrigger asChild>
+      <SheetTrigger asChild>
         {isEditing ? (
           <Button variant="ghost" size="sm">
             Edit
@@ -171,13 +172,14 @@ export function ContractDialog({
             Add contract
           </Button>
         )}
-      </DialogTrigger>
-      <DialogContent className="sm:max-w-2xl">
-        <DialogHeader>
-          <DialogTitle>{isEditing ? "Edit contract" : "Add contract"}</DialogTitle>
-        </DialogHeader>
+      </SheetTrigger>
+      <SheetContent>
+        <SheetHeader>
+          <SheetTitle>{isEditing ? "Edit contract" : "Add contract"}</SheetTitle>
+        </SheetHeader>
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col gap-6">
+          <form id="contract-form" onSubmit={form.handleSubmit(onSubmit)} className="contents">
+            <SheetBody>
             <section className="grid gap-4 sm:grid-cols-2">
               <h3 className="text-muted-foreground col-span-full text-xs font-semibold tracking-wide uppercase">
                 Deal
@@ -542,14 +544,15 @@ export function ContractDialog({
               )}
             />
 
-            <DialogFooter>
-              <Button type="submit" disabled={isPending}>
-                {isPending ? "Saving…" : "Save"}
-              </Button>
-            </DialogFooter>
+            </SheetBody>
           </form>
         </Form>
-      </DialogContent>
-    </Dialog>
+        <SheetFooter>
+          <Button type="submit" form="contract-form" disabled={isPending}>
+            {isPending ? "Saving…" : "Save"}
+          </Button>
+        </SheetFooter>
+      </SheetContent>
+    </Sheet>
   );
 }
