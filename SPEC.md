@@ -77,7 +77,7 @@ Known data-quality issues driving the schema design below:
 - `vin`, `engine_number`
 - `status` enum(`available`, `on_road`, `parked`, `in_repair`, `for_sale`, `sold`, `written_off`)
 - `legacy_status_note` (text — raw original sheet value, preserved verbatim)
-- `assigned_to` (nullable fk → profiles, or free text where it doesn't match a real staff account)
+- `assigned_to` (nullable fk → profiles, when the assignee has a real account) / `assigned_to_name` (free text, used when they don't — e.g. imported historical data, an external contractor)
 - `current_mileage`, `next_service_km`, `next_service_date`, `last_serviced_by`
 - `tracker_supplier`, `tracker_running` enum(`yes`, `no`, `no_info`)
 - `natis_on_file` boolean, `license_disc_expiry` date, `has_spare_key` boolean

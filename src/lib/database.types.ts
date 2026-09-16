@@ -169,6 +169,7 @@ export interface Database {
           status: VehicleStatus;
           legacy_status_note: string | null;
           assigned_to: string | null;
+          assigned_to_name: string | null;
           current_mileage: number | null;
           next_service_km: number | null;
           next_service_date: string | null;
@@ -197,6 +198,7 @@ export interface Database {
           status?: VehicleStatus;
           legacy_status_note?: string | null;
           assigned_to?: string | null;
+          assigned_to_name?: string | null;
           current_mileage?: number | null;
           next_service_km?: number | null;
           next_service_date?: string | null;
