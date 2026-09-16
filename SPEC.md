@@ -64,8 +64,9 @@ Known data-quality issues driving the schema design below:
 - `id`, `client_id` fk → clients
 - `bank_name`, `account_type`, `branch_code` (plaintext — not sensitive alone)
 - `account_holder_name_encrypted`, `account_number_encrypted` (application-level AES-256-GCM ciphertext)
+- `account_holder_name_iv`, `account_number_iv` (each encrypted field gets its own IV — AES-GCM requires a unique key+IV pair per encryption, so the two fields can't share one)
 - `account_number_last4` (plaintext, for masked display without decrypting)
-- `iv`, `key_version` (supports future key rotation)
+- `key_version` (supports future key rotation)
 - `created_by` fk → profiles, `created_at`, `updated_at`
 - RLS: `admin`/`manager` only — `technician` denied entirely at the database level.
 - Every decrypt/reveal action is written to `audit_log`. Never included in exports, generated PDFs, or WhatsApp/SMS messages.

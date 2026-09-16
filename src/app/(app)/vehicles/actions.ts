@@ -3,19 +3,11 @@
 import { revalidatePath } from "next/cache";
 
 import { createClient } from "@/lib/supabase/server";
-import { getCurrentProfile } from "@/lib/auth/current-profile";
+import { requireManagerOrAdmin } from "@/lib/auth/require-role";
 import { vehicleFormSchema, type VehicleFormValues } from "./schema";
 
 export interface ActionResult {
   error?: string;
-}
-
-async function requireManagerOrAdmin() {
-  const profile = await getCurrentProfile();
-  if (!profile || (profile.role !== "admin" && profile.role !== "manager")) {
-    throw new Error("Not authorized");
-  }
-  return profile;
 }
 
 function toInt(value: string | undefined): number | null {

@@ -34,7 +34,10 @@ create type public.vehicle_cost_type as enum ('service', 'repair', 'car_wash', '
 
 create type public.bank_account_type as enum ('cheque', 'savings', 'other');
 
-create type public.audit_action as enum ('insert', 'update', 'delete');
+-- 'reveal' covers decrypting client_banking_details for display — a SELECT
+-- never fires the audit_row_change() trigger, so that action is logged
+-- explicitly by the application at the point of decryption.
+create type public.audit_action as enum ('insert', 'update', 'delete', 'reveal');
 
 -- updated_at trigger helper, reused by every table below that has an updated_at column
 create or replace function public.set_updated_at()

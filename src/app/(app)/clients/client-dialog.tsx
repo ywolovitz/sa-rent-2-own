@@ -1,0 +1,358 @@
+"use client";
+
+import { useState, useTransition } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { Eye, Plus } from "lucide-react";
+import { toast } from "sonner";
+
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+
+import { createClient, revealBankingDetails, updateClient } from "./actions";
+import { bankAccountTypeValues, clientFormSchema, type ClientFormValues } from "./schema";
+import type { ClientWithBanking } from "./types";
+
+const ACCOUNT_TYPE_LABELS: Record<(typeof bankAccountTypeValues)[number], string> = {
+  cheque: "Cheque / current",
+  savings: "Savings",
+  other: "Other",
+};
+
+function toFormValues(client?: ClientWithBanking): ClientFormValues {
+  if (!client) {
+    return { fullName: "", cellNumber: "" };
+  }
+  return {
+    fullName: client.full_name,
+    idNumber: client.id_number ?? undefined,
+    cellNumber: client.cell_number,
+    altCellNumber: client.alt_cell_number ?? undefined,
+    email: client.email ?? undefined,
+    address: client.address ?? undefined,
+    notes: client.notes ?? undefined,
+    bankName: undefined,
+    accountType: undefined,
+    branchCode: undefined,
+    accountHolderName: undefined,
+    accountNumber: undefined,
+  };
+}
+
+function RevealedBanking({ clientId }: { clientId: string }) {
+  const [isPending, startTransition] = useTransition();
+  const [revealed, setRevealed] = useState<{ accountHolderName: string; accountNumber: string } | null>(
+    null
+  );
+
+  if (revealed) {
+    return (
+      <p className="text-muted-foreground text-sm">
+        {revealed.accountHolderName} — {revealed.accountNumber}
+      </p>
+    );
+  }
+
+  return (
+    <Button
+      type="button"
+      variant="ghost"
+      size="sm"
+      disabled={isPending}
+      onClick={() =>
+        startTransition(async () => {
+          const result = await revealBankingDetails(clientId);
+          if (result.error || !result.data) {
+            toast.error(result.error ?? "Couldn't reveal banking details");
+            return;
+          }
+          setRevealed(result.data);
+        })
+      }
+    >
+      <Eye />
+      {isPending ? "Revealing…" : "Reveal"}
+    </Button>
+  );
+}
+
+export function ClientDialog({ client }: { client?: ClientWithBanking }) {
+  const [open, setOpen] = useState(false);
+  const [isPending, startTransition] = useTransition();
+  const isEditing = Boolean(client);
+
+  const form = useForm<ClientFormValues>({
+    resolver: zodResolver(clientFormSchema),
+    defaultValues: toFormValues(client),
+  });
+
+  function onSubmit(values: ClientFormValues) {
+    startTransition(async () => {
+      const result = isEditing
+        ? await updateClient(client!.id, values)
+        : await createClient(values);
+
+      if (result.error) {
+        toast.error(result.error);
+        return;
+      }
+
+      toast.success(isEditing ? "Client updated" : "Client added");
+      setOpen(false);
+      form.reset(toFormValues(undefined));
+    });
+  }
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next);
+        if (next) form.reset(toFormValues(client));
+      }}
+    >
+      <DialogTrigger asChild>
+        {isEditing ? (
+          <Button variant="ghost" size="sm">
+            Edit
+          </Button>
+        ) : (
+          <Button>
+            <Plus />
+            Add client
+          </Button>
+        )}
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-xl">
+        <DialogHeader>
+          <DialogTitle>{isEditing ? "Edit client" : "Add client"}</DialogTitle>
+        </DialogHeader>
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col gap-6">
+            <section className="grid gap-4 sm:grid-cols-2">
+              <h3 className="text-muted-foreground col-span-full text-xs font-semibold tracking-wide uppercase">
+                Client
+              </h3>
+              <FormField
+                control={form.control}
+                name="fullName"
+                render={({ field }) => (
+                  <FormItem className="sm:col-span-2">
+                    <FormLabel>Full name</FormLabel>
+                    <FormControl>
+                      <Input {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="idNumber"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>ID number</FormLabel>
+                    <FormControl>
+                      <Input {...field} value={field.value ?? ""} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="cellNumber"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Cell number</FormLabel>
+                    <FormControl>
+                      <Input type="tel" placeholder="082 123 4567" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="altCellNumber"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Alternate cell number</FormLabel>
+                    <FormControl>
+                      <Input type="tel" {...field} value={field.value ?? ""} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="email"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Email</FormLabel>
+                    <FormControl>
+                      <Input type="email" {...field} value={field.value ?? ""} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="address"
+                render={({ field }) => (
+                  <FormItem className="sm:col-span-2">
+                    <FormLabel>Address</FormLabel>
+                    <FormControl>
+                      <Input {...field} value={field.value ?? ""} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="notes"
+                render={({ field }) => (
+                  <FormItem className="sm:col-span-2">
+                    <FormLabel>Notes</FormLabel>
+                    <FormControl>
+                      <Textarea {...field} value={field.value ?? ""} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </section>
+
+            <section className="grid gap-4 sm:grid-cols-2">
+              <div className="col-span-full flex items-center justify-between">
+                <h3 className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">
+                  Banking details
+                </h3>
+                {isEditing && client!.banking && <RevealedBanking clientId={client!.id} />}
+              </div>
+              {isEditing && client!.banking ? (
+                <p className="text-muted-foreground col-span-full text-sm">
+                  On file: {client!.banking.bank_name} •••• {client!.banking.account_number_last4}.
+                  Fill in the fields below to replace it.
+                </p>
+              ) : (
+                <p className="text-muted-foreground col-span-full text-sm">
+                  Optional. Encrypted at rest — only admins and managers can view it.
+                </p>
+              )}
+              <FormField
+                control={form.control}
+                name="bankName"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Bank name</FormLabel>
+                    <FormControl>
+                      <Input {...field} value={field.value ?? ""} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="accountType"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Account type</FormLabel>
+                    <Select value={field.value} onValueChange={field.onChange}>
+                      <FormControl>
+                        <SelectTrigger className="w-full">
+                          <SelectValue placeholder="Select type" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {bankAccountTypeValues.map((type) => (
+                          <SelectItem key={type} value={type}>
+                            {ACCOUNT_TYPE_LABELS[type]}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="branchCode"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Branch code</FormLabel>
+                    <FormControl>
+                      <Input {...field} value={field.value ?? ""} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="accountHolderName"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Account holder name</FormLabel>
+                    <FormControl>
+                      <Input {...field} value={field.value ?? ""} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="accountNumber"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Account number</FormLabel>
+                    <FormControl>
+                      <Input {...field} value={field.value ?? ""} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </section>
+
+            <DialogFooter>
+              <Button type="submit" disabled={isPending}>
+                {isPending ? "Saving…" : "Save"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </Form>
+      </DialogContent>
+    </Dialog>
+  );
+}

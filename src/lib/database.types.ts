@@ -39,7 +39,7 @@ export type VehicleCostType =
   | "maintenance"
   | "other";
 export type BankAccountType = "cheque" | "savings" | "other";
-export type AuditAction = "insert" | "update" | "delete";
+export type AuditAction = "insert" | "update" | "delete" | "reveal";
 
 export interface Database {
   public: {
@@ -126,9 +126,10 @@ export interface Database {
           account_type: BankAccountType;
           branch_code: string | null;
           account_holder_name_encrypted: string;
+          account_holder_name_iv: string;
           account_number_encrypted: string;
+          account_number_iv: string;
           account_number_last4: string;
-          iv: string;
           key_version: number;
           created_by: string | null;
           created_at: string;
@@ -141,9 +142,10 @@ export interface Database {
           account_type?: BankAccountType;
           branch_code?: string | null;
           account_holder_name_encrypted: string;
+          account_holder_name_iv: string;
           account_number_encrypted: string;
+          account_number_iv: string;
           account_number_last4: string;
-          iv: string;
           key_version?: number;
           created_by?: string | null;
           created_at?: string;
