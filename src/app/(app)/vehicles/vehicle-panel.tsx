@@ -147,13 +147,13 @@ export function VehiclePanel({
         <SheetHeader>
           <SheetTitle>{isEditing ? "Edit vehicle" : "Add vehicle"}</SheetTitle>
         </SheetHeader>
-        <Form {...form}>
-          <form
-            id="vehicle-form"
-            onSubmit={form.handleSubmit(onSubmit)}
-            className="contents"
-          >
-            <SheetBody>
+        <SheetBody>
+          <Form {...form}>
+            <form
+              id="vehicle-form"
+              onSubmit={form.handleSubmit(onSubmit)}
+              className="flex flex-col gap-6"
+            >
               <section className="grid gap-4 sm:grid-cols-2">
                 <h3 className="text-muted-foreground col-span-full text-xs font-semibold tracking-wide uppercase">
                   Vehicle
@@ -480,15 +480,16 @@ export function VehiclePanel({
                 </div>
               </section>
 
-              {isEditing && (
-                <>
-                  <Separator />
-                  <VehicleCostsSection vehicleId={vehicle!.id} canManage={canManage} />
-                </>
-              )}
-            </SheetBody>
-          </form>
-        </Form>
+            </form>
+          </Form>
+
+          {isEditing && (
+            <>
+              <Separator />
+              <VehicleCostsSection vehicleId={vehicle!.id} canManage={canManage} />
+            </>
+          )}
+        </SheetBody>
         <SheetFooter>
           <Button type="submit" form="vehicle-form" disabled={isPending}>
             {isPending ? "Saving…" : "Save"}

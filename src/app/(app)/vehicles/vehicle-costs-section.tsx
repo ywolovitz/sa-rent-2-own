@@ -126,7 +126,6 @@ export function VehicleCostsSection({
         <form
           ref={formRef}
           action={onAddSubmit}
-          encType="multipart/form-data"
           className="flex flex-col gap-3 rounded-md border p-3"
         >
           <div className="grid grid-cols-2 gap-3">
