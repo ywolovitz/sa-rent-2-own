@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useTransition } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Plus } from "lucide-react";
@@ -34,6 +34,7 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet";
 import { Separator } from "@/components/ui/separator";
+import { useControllableOpen } from "@/lib/use-controllable-open";
 
 import { createVehicle, updateVehicle } from "./actions";
 import {
@@ -93,11 +94,15 @@ function toFormValues(vehicle?: VehicleWithRegistration): VehicleFormValues {
 export function VehiclePanel({
   vehicle,
   canManage = true,
+  open: openProp,
+  onOpenChange: onOpenChangeProp,
 }: {
   vehicle?: VehicleWithRegistration;
   canManage?: boolean;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }) {
-  const [open, setOpen] = useState(false);
+  const { open, setOpen, isControlled } = useControllableOpen(openProp, onOpenChangeProp);
   const [isPending, startTransition] = useTransition();
   const isEditing = Boolean(vehicle);
 
@@ -131,18 +136,20 @@ export function VehiclePanel({
         if (next) form.reset(toFormValues(vehicle));
       }}
     >
-      <SheetTrigger asChild>
-        {isEditing ? (
-          <Button variant="ghost" size="sm">
-            Edit
-          </Button>
-        ) : (
-          <Button>
-            <Plus />
-            Add vehicle
-          </Button>
-        )}
-      </SheetTrigger>
+      {!isControlled && (
+        <SheetTrigger asChild>
+          {isEditing ? (
+            <Button variant="ghost" size="sm">
+              Edit
+            </Button>
+          ) : (
+            <Button>
+              <Plus />
+              Add vehicle
+            </Button>
+          )}
+        </SheetTrigger>
+      )}
       <SheetContent>
         <SheetHeader>
           <SheetTitle>{isEditing ? "Edit vehicle" : "Add vehicle"}</SheetTitle>

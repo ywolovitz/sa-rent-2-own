@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useControllableOpen } from "@/lib/use-controllable-open";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Eye, Plus } from "lucide-react";
@@ -101,8 +102,16 @@ function RevealedBanking({ clientId }: { clientId: string }) {
   );
 }
 
-export function ClientPanel({ client }: { client?: ClientWithBanking }) {
-  const [open, setOpen] = useState(false);
+export function ClientPanel({
+  client,
+  open: openProp,
+  onOpenChange: onOpenChangeProp,
+}: {
+  client?: ClientWithBanking;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+}) {
+  const { open, setOpen, isControlled } = useControllableOpen(openProp, onOpenChangeProp);
   const [isPending, startTransition] = useTransition();
   const isEditing = Boolean(client);
 
@@ -136,18 +145,20 @@ export function ClientPanel({ client }: { client?: ClientWithBanking }) {
         if (next) form.reset(toFormValues(client));
       }}
     >
-      <SheetTrigger asChild>
-        {isEditing ? (
-          <Button variant="ghost" size="sm">
-            Edit
-          </Button>
-        ) : (
-          <Button>
-            <Plus />
-            Add client
-          </Button>
-        )}
-      </SheetTrigger>
+      {!isControlled && (
+        <SheetTrigger asChild>
+          {isEditing ? (
+            <Button variant="ghost" size="sm">
+              Edit
+            </Button>
+          ) : (
+            <Button>
+              <Plus />
+              Add client
+            </Button>
+          )}
+        </SheetTrigger>
+      )}
       <SheetContent>
         <SheetHeader>
           <SheetTitle>{isEditing ? "Edit client" : "Add client"}</SheetTitle>

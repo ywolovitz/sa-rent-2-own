@@ -25,6 +25,7 @@ type SortKey = "name" | "cell" | "idNumber";
 
 export function ClientsTable({ rows }: { rows: ClientWithBanking[] }) {
   const [bankingFilter, setBankingFilter] = useState<BankingFilter>("all");
+  const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const searchFn = useCallback(
     (row: ClientWithBanking, query: string) =>
@@ -100,7 +101,11 @@ export function ClientsTable({ rows }: { rows: ClientWithBanking[] }) {
           </TableHeader>
           <TableBody>
             {filteredRows.map((client) => (
-              <TableRow key={client.id}>
+              <TableRow
+                key={client.id}
+                className="cursor-pointer"
+                onClick={() => setSelectedId(client.id)}
+              >
                 <TableCell className="font-medium">{client.full_name}</TableCell>
                 <TableCell>{formatSaPhoneForDisplay(client.cell_number)}</TableCell>
                 <TableCell>{client.id_number ?? "—"}</TableCell>
@@ -113,8 +118,15 @@ export function ClientsTable({ rows }: { rows: ClientWithBanking[] }) {
                     <span className="text-muted-foreground">None on file</span>
                   )}
                 </TableCell>
-                <TableCell className="flex items-center justify-end gap-1">
-                  <ClientPanel client={client} />
+                <TableCell
+                  className="flex items-center justify-end gap-1"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <ClientPanel
+                    client={client}
+                    open={selectedId === client.id}
+                    onOpenChange={(next) => setSelectedId(next ? client.id : null)}
+                  />
                   <DeleteClientButton clientId={client.id} label={client.full_name} />
                 </TableCell>
               </TableRow>

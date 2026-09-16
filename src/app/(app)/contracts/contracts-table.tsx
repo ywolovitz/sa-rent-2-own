@@ -59,6 +59,7 @@ export function ContractsTable({
 }) {
   const [statusFilter, setStatusFilter] = useState<"all" | ContractStatus>("all");
   const [typeFilter, setTypeFilter] = useState<"all" | ContractType>("all");
+  const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const searchFn = useCallback(
     (row: ContractRow, query: string) =>
@@ -162,7 +163,11 @@ export function ContractsTable({
           </TableHeader>
           <TableBody>
             {filteredRows.map((row) => (
-              <TableRow key={row.id}>
+              <TableRow
+                key={row.id}
+                className="cursor-pointer"
+                onClick={() => setSelectedId(row.id)}
+              >
                 <TableCell className="font-medium">{row.vehicleLabel}</TableCell>
                 <TableCell>{row.clientName}</TableCell>
                 <TableCell className="capitalize">{row.contract_type.replace(/_/g, " ")}</TableCell>
@@ -180,8 +185,17 @@ export function ContractsTable({
                   )}
                 </TableCell>
                 <TableCell>{row.end_date ?? "—"}</TableCell>
-                <TableCell className="flex items-center justify-end gap-1">
-                  <ContractPanel contract={row} vehicles={vehicles} clients={clients} />
+                <TableCell
+                  className="flex items-center justify-end gap-1"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <ContractPanel
+                    contract={row}
+                    vehicles={vehicles}
+                    clients={clients}
+                    open={selectedId === row.id}
+                    onOpenChange={(next) => setSelectedId(next ? row.id : null)}
+                  />
                   <DeleteContractButton contractId={row.id} label={row.vehicleLabel} />
                 </TableCell>
               </TableRow>

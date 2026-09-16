@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useTransition } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Plus } from "lucide-react";
@@ -34,6 +34,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { useControllableOpen } from "@/lib/use-controllable-open";
 
 import { createContract, updateContract } from "./actions";
 import {
@@ -109,12 +110,16 @@ export function ContractPanel({
   contract,
   vehicles,
   clients,
+  open: openProp,
+  onOpenChange: onOpenChangeProp,
 }: {
   contract?: ContractWithDetails;
   vehicles: SelectableVehicle[];
   clients: SelectableClient[];
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }) {
-  const [open, setOpen] = useState(false);
+  const { open, setOpen, isControlled } = useControllableOpen(openProp, onOpenChangeProp);
   const [isPending, startTransition] = useTransition();
   const isEditing = Boolean(contract);
 
@@ -161,18 +166,20 @@ export function ContractPanel({
         if (next) form.reset(toFormValues(contract));
       }}
     >
-      <SheetTrigger asChild>
-        {isEditing ? (
-          <Button variant="ghost" size="sm">
-            Edit
-          </Button>
-        ) : (
-          <Button>
-            <Plus />
-            Add contract
-          </Button>
-        )}
-      </SheetTrigger>
+      {!isControlled && (
+        <SheetTrigger asChild>
+          {isEditing ? (
+            <Button variant="ghost" size="sm">
+              Edit
+            </Button>
+          ) : (
+            <Button>
+              <Plus />
+              Add contract
+            </Button>
+          )}
+        </SheetTrigger>
+      )}
       <SheetContent>
         <SheetHeader>
           <SheetTitle>{isEditing ? "Edit contract" : "Add contract"}</SheetTitle>

@@ -54,6 +54,7 @@ export function VehiclesTable({
   canManage: boolean;
 }) {
   const [statusFilter, setStatusFilter] = useState<"all" | VehicleStatus>("all");
+  const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const searchFn = useCallback(
     (row: VehicleWithRegistration, query: string) =>
@@ -140,7 +141,11 @@ export function VehiclesTable({
           </TableHeader>
           <TableBody>
             {filteredRows.map((vehicle) => (
-              <TableRow key={vehicle.id}>
+              <TableRow
+                key={vehicle.id}
+                className={canManage ? "cursor-pointer" : undefined}
+                onClick={() => canManage && setSelectedId(vehicle.id)}
+              >
                 <TableCell className="font-medium">{vehicle.current_plate ?? "—"}</TableCell>
                 <TableCell>
                   {[vehicle.year, vehicle.make, vehicle.model].filter(Boolean).join(" ") || "—"}
@@ -151,8 +156,16 @@ export function VehiclesTable({
                 {canManage && <TableCell>{vehicle.current_client_name ?? "—"}</TableCell>}
                 <TableCell>{vehicle.next_service_date ?? "—"}</TableCell>
                 {canManage && (
-                  <TableCell className="flex items-center justify-end gap-1">
-                    <VehiclePanel vehicle={vehicle} canManage={canManage} />
+                  <TableCell
+                    className="flex items-center justify-end gap-1"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <VehiclePanel
+                      vehicle={vehicle}
+                      canManage={canManage}
+                      open={selectedId === vehicle.id}
+                      onOpenChange={(next) => setSelectedId(next ? vehicle.id : null)}
+                    />
                     <DeleteVehicleButton
                       vehicleId={vehicle.id}
                       label={vehicle.current_plate ?? vehicle.file_no}
