@@ -4,7 +4,6 @@ import { useEffect, useRef, useState, useTransition } from "react";
 import { Paperclip, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -15,6 +14,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 
 import {
@@ -32,6 +33,8 @@ const COST_TYPE_LABELS: Record<(typeof vehicleCostTypeValues)[number], string> =
   maintenance: "Maintenance",
   other: "Other",
 };
+
+type TabValue = "all" | (typeof vehicleCostTypeValues)[number];
 
 function InvoiceLink({ filePath }: { filePath: string }) {
   const [isPending, startTransition] = useTransition();
@@ -58,6 +61,91 @@ function InvoiceLink({ filePath }: { filePath: string }) {
   );
 }
 
+function CostsTable({
+  costs,
+  showType,
+  loading,
+  canManage,
+  isPending,
+  onDelete,
+}: {
+  costs: VehicleCost[];
+  showType: boolean;
+  loading: boolean;
+  canManage: boolean;
+  isPending: boolean;
+  onDelete: (costId: string) => void;
+}) {
+  if (loading) {
+    return <p className="text-muted-foreground text-sm">Loading…</p>;
+  }
+
+  if (costs.length === 0) {
+    return <p className="text-muted-foreground text-sm">No costs logged yet.</p>;
+  }
+
+  const total = costs.reduce((sum, c) => sum + c.amount, 0);
+
+  return (
+    <div className="rounded-md border">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Date</TableHead>
+            {showType && <TableHead>Type</TableHead>}
+            <TableHead>Supplier</TableHead>
+            <TableHead>Notes</TableHead>
+            <TableHead className="text-right">Amount</TableHead>
+            <TableHead className="w-16" />
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {costs.map((cost) => (
+            <TableRow key={cost.id}>
+              <TableCell>{cost.cost_date}</TableCell>
+              {showType && <TableCell>{COST_TYPE_LABELS[cost.cost_type]}</TableCell>}
+              <TableCell>{cost.supplier || "—"}</TableCell>
+              <TableCell className="max-w-40">
+                <div className="flex flex-col gap-0.5">
+                  {cost.notes && <span className="truncate">{cost.notes}</span>}
+                  {cost.invoice_file_path && <InvoiceLink filePath={cost.invoice_file_path} />}
+                  {!cost.notes && !cost.invoice_file_path && (
+                    <span className="text-muted-foreground">—</span>
+                  )}
+                </div>
+              </TableCell>
+              <TableCell className="text-right font-medium">
+                R{cost.amount.toLocaleString()}
+              </TableCell>
+              <TableCell>
+                {canManage && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    aria-label="Delete cost"
+                    disabled={isPending}
+                    onClick={() => onDelete(cost.id)}
+                  >
+                    <Trash2 className="text-destructive size-4" />
+                  </Button>
+                )}
+              </TableCell>
+            </TableRow>
+          ))}
+          <TableRow>
+            <TableCell colSpan={showType ? 4 : 3} className="text-muted-foreground text-right text-xs uppercase">
+              Total
+            </TableCell>
+            <TableCell className="text-right font-semibold">R{total.toLocaleString()}</TableCell>
+            <TableCell />
+          </TableRow>
+        </TableBody>
+      </Table>
+    </div>
+  );
+}
+
 export function VehicleCostsSection({
   vehicleId,
   canManage,
@@ -67,6 +155,7 @@ export function VehicleCostsSection({
 }) {
   const [costs, setCosts] = useState<VehicleCost[] | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
+  const [activeTab, setActiveTab] = useState<TabValue>("all");
   const [isPending, startTransition] = useTransition();
   const formRef = useRef<HTMLFormElement>(null);
 
@@ -109,6 +198,10 @@ export function VehicleCostsSection({
       refresh();
     });
   }
+
+  const visibleCosts = (costs ?? []).filter(
+    (c) => activeTab === "all" || c.cost_type === activeTab
+  );
 
   return (
     <section className="flex flex-col gap-3">
@@ -181,43 +274,26 @@ export function VehicleCostsSection({
         </form>
       )}
 
-      <div className="flex flex-col gap-2">
-        {costs === null && <p className="text-muted-foreground text-sm">Loading…</p>}
-        {costs?.length === 0 && (
-          <p className="text-muted-foreground text-sm">No costs logged yet.</p>
-        )}
-        {costs?.map((cost) => (
-          <div
-            key={cost.id}
-            className="flex items-center justify-between gap-2 rounded-md border px-3 py-2 text-sm"
-          >
-            <div className="flex flex-col gap-0.5">
-              <div className="flex items-center gap-2">
-                <Badge variant="outline">{COST_TYPE_LABELS[cost.cost_type]}</Badge>
-                <span className="text-muted-foreground">{cost.cost_date}</span>
-                {cost.supplier && <span>{cost.supplier}</span>}
-              </div>
-              {cost.notes && <p className="text-muted-foreground text-xs">{cost.notes}</p>}
-              {cost.invoice_file_path && <InvoiceLink filePath={cost.invoice_file_path} />}
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="font-medium">R{cost.amount.toLocaleString()}</span>
-              {canManage && (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  aria-label="Delete cost"
-                  disabled={isPending}
-                  onClick={() => onDelete(cost.id)}
-                >
-                  <Trash2 className="text-destructive size-4" />
-                </Button>
-              )}
-            </div>
-          </div>
-        ))}
-      </div>
+      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as TabValue)}>
+        <TabsList className="flex-wrap">
+          <TabsTrigger value="all">All</TabsTrigger>
+          {vehicleCostTypeValues.map((t) => (
+            <TabsTrigger key={t} value={t}>
+              {COST_TYPE_LABELS[t]}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+        <TabsContent value={activeTab}>
+          <CostsTable
+            costs={visibleCosts}
+            showType={activeTab === "all"}
+            loading={costs === null}
+            canManage={canManage}
+            isPending={isPending}
+            onDelete={onDelete}
+          />
+        </TabsContent>
+      </Tabs>
     </section>
   );
 }

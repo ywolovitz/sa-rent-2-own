@@ -3,6 +3,12 @@
 
 @custom-variant dark (&:is(.dark *));
 
+html {
+  /* Bumps the rem base so every Tailwind text-* utility scales up
+     app-wide, rather than editing font sizes one component at a time. */
+  font-size: 112.5%;
+}
+
 :root {
   --radius: 0.625rem;
   --background: oklch(1 0 0);

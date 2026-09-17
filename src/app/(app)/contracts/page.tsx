@@ -7,7 +7,14 @@ import { ContractPanel } from "./contract-panel";
 import { ContractsTable } from "./contracts-table";
 import type { ContractRow, SelectableClient, SelectableVehicle } from "./types";
 
-export default async function ContractsPage() {
+function firstParam(value: string | string[] | undefined) {
+  return Array.isArray(value) ? value[0] : value;
+}
+
+export default async function ContractsPage({ searchParams }: PageProps<"/contracts">) {
+  const params = await searchParams;
+  const initialEndingSoon = firstParam(params.ending) === "soon";
+
   const profile = await getCurrentProfile();
   if (!profile || (profile.role !== "admin" && profile.role !== "manager")) {
     redirect("/");
@@ -69,7 +76,12 @@ export default async function ContractsPage() {
         <ContractPanel vehicles={selectableVehicles} clients={selectableClients} />
       </div>
 
-      <ContractsTable rows={rows} vehicles={selectableVehicles} clients={selectableClients} />
+      <ContractsTable
+        rows={rows}
+        vehicles={selectableVehicles}
+        clients={selectableClients}
+        initialEndingSoon={initialEndingSoon}
+      />
     </div>
   );
 }

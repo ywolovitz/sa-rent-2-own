@@ -1,8 +1,10 @@
 "use client";
 
 import { useCallback, useState } from "react";
+import { X } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -13,6 +15,7 @@ import {
 } from "@/components/ui/select";
 import { SortableHead } from "@/components/ui/sortable-head";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { isoDaysFromNow } from "@/lib/date-ranges";
 import { compareNumbers, compareStrings, useTableControls } from "@/lib/use-table-controls";
 import type { VehicleStatus } from "@/lib/database.types";
 
@@ -49,11 +52,16 @@ type SortKey = "reg" | "model" | "status" | "client" | "nextService";
 export function VehiclesTable({
   rows,
   canManage,
+  initialStatus,
+  initialServiceDueSoon,
 }: {
   rows: VehicleWithRegistration[];
   canManage: boolean;
+  initialStatus?: VehicleStatus;
+  initialServiceDueSoon?: boolean;
 }) {
-  const [statusFilter, setStatusFilter] = useState<"all" | VehicleStatus>("all");
+  const [statusFilter, setStatusFilter] = useState<"all" | VehicleStatus>(initialStatus ?? "all");
+  const [serviceDueSoon, setServiceDueSoon] = useState(initialServiceDueSoon ?? false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const searchFn = useCallback(
@@ -80,11 +88,16 @@ export function VehiclesTable({
       ),
   } satisfies Record<SortKey, (a: VehicleWithRegistration, b: VehicleWithRegistration) => number>;
 
+  const serviceDueCutoff = isoDaysFromNow(30);
+  const preFiltered = rows
+    .filter((r) => statusFilter === "all" || r.status === statusFilter)
+    .filter((r) => !serviceDueSoon || (r.next_service_date && r.next_service_date <= serviceDueCutoff));
+
   const { search, setSearch, sortKey, sortDir, onSort, filteredRows } = useTableControls<
     VehicleWithRegistration,
     SortKey
   >({
-    rows: statusFilter === "all" ? rows : rows.filter((r) => r.status === statusFilter),
+    rows: preFiltered,
     searchFn,
     sortFns,
     defaultSortKey: "nextService",
@@ -112,6 +125,17 @@ export function VehiclesTable({
             ))}
           </SelectContent>
         </Select>
+        {serviceDueSoon && (
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            onClick={() => setServiceDueSoon(false)}
+          >
+            Due within 30 days
+            <X />
+          </Button>
+        )}
         <p className="text-muted-foreground text-sm">
           {filteredRows.length === rows.length
             ? `${rows.length} in the fleet`

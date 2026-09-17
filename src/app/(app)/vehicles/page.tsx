@@ -1,11 +1,21 @@
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/auth/current-profile";
+import { vehicleStatusValues } from "./schema";
 
 import { VehiclePanel } from "./vehicle-panel";
 import { VehiclesTable } from "./vehicles-table";
 import type { VehicleWithRegistration } from "./types";
 
-export default async function VehiclesPage() {
+function firstParam(value: string | string[] | undefined) {
+  return Array.isArray(value) ? value[0] : value;
+}
+
+export default async function VehiclesPage({ searchParams }: PageProps<"/vehicles">) {
+  const params = await searchParams;
+  const statusParam = firstParam(params.status);
+  const initialStatus = vehicleStatusValues.find((s) => s === statusParam);
+  const initialServiceDueSoon = firstParam(params.service) === "due_soon";
+
   const [profile, supabase] = await Promise.all([getCurrentProfile(), createClient()]);
   const canManage = profile?.role === "admin" || profile?.role === "manager";
 
@@ -59,7 +69,12 @@ export default async function VehiclesPage() {
         {canManage && <VehiclePanel />}
       </div>
 
-      <VehiclesTable rows={rows} canManage={canManage} />
+      <VehiclesTable
+        rows={rows}
+        canManage={canManage}
+        initialStatus={initialStatus}
+        initialServiceDueSoon={initialServiceDueSoon}
+      />
     </div>
   );
 }

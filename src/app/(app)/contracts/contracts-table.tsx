@@ -1,8 +1,10 @@
 "use client";
 
 import { useCallback, useState } from "react";
+import { X } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -13,6 +15,7 @@ import {
 } from "@/components/ui/select";
 import { SortableHead } from "@/components/ui/sortable-head";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { isoDaysFromNow } from "@/lib/date-ranges";
 import { compareNumbers, compareStrings, useTableControls } from "@/lib/use-table-controls";
 import type { ContractStatus, ContractType } from "@/lib/database.types";
 
@@ -52,13 +55,16 @@ export function ContractsTable({
   rows,
   vehicles,
   clients,
+  initialEndingSoon,
 }: {
   rows: ContractRow[];
   vehicles: SelectableVehicle[];
   clients: SelectableClient[];
+  initialEndingSoon?: boolean;
 }) {
   const [statusFilter, setStatusFilter] = useState<"all" | ContractStatus>("all");
   const [typeFilter, setTypeFilter] = useState<"all" | ContractType>("all");
+  const [endingSoon, setEndingSoon] = useState(initialEndingSoon ?? false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const searchFn = useCallback(
@@ -79,9 +85,11 @@ export function ContractsTable({
       compareStrings(a.end_date, b.end_date),
   } satisfies Record<SortKey, (a: ContractRow, b: ContractRow) => number>;
 
+  const endingSoonCutoff = isoDaysFromNow(90);
   const preFiltered = rows
     .filter((r) => statusFilter === "all" || r.status === statusFilter)
-    .filter((r) => typeFilter === "all" || r.contract_type === typeFilter);
+    .filter((r) => typeFilter === "all" || r.contract_type === typeFilter)
+    .filter((r) => !endingSoon || (r.end_date && r.end_date <= endingSoonCutoff));
 
   const { search, setSearch, sortKey, sortDir, onSort, filteredRows } = useTableControls<
     ContractRow,
@@ -128,6 +136,12 @@ export function ContractsTable({
             ))}
           </SelectContent>
         </Select>
+        {endingSoon && (
+          <Button type="button" variant="secondary" size="sm" onClick={() => setEndingSoon(false)}>
+            Ending within 3 months
+            <X />
+          </Button>
+        )}
         <p className="text-muted-foreground text-sm">
           {filteredRows.length === rows.length
             ? `${rows.length} on record`
