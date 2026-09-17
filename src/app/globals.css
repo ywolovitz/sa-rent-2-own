@@ -10,6 +10,15 @@ html {
 }
 
 :root {
+  /* Brand palette — the fixed set of colors to draw from across the
+     UI, distinct from the semantic tokens below (which may reassign
+     these per light/dark mode). */
+  --brand-red: #ff5252;
+  --brand-blue-dark: #0f6b93;
+  --brand-blue: #007fa3;
+  --brand-grey: #9e9e9e;
+  --brand-grey-light: #d6d6d6;
+
   --radius: 0.625rem;
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
@@ -22,22 +31,23 @@ html {
   --secondary: oklch(0.97 0 0);
   --secondary-foreground: oklch(0.205 0 0);
   --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
+  --muted-foreground: var(--brand-grey);
   --accent: oklch(0.97 0 0);
   --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --destructive-foreground: oklch(0.985 0 0);
+  --destructive: var(--brand-red);
+  --destructive-foreground: #ffffff;
   --success: oklch(0.62 0.15 145);
   --success-foreground: oklch(0.985 0 0);
   --warning: oklch(0.75 0.16 75);
   --warning-foreground: oklch(0.145 0 0);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
+  --border: var(--brand-grey-light);
+  --input: var(--brand-grey-light);
   --ring: oklch(0.708 0 0);
   /* Fixed brand color, not theme-relative — the sidebar keeps this
      identity in both light and dark mode. */
-  --sidebar: oklch(0.32 0.09 25);
-  --sidebar-foreground: oklch(0.985 0 0);
+  --sidebar: var(--brand-blue-dark);
+  --sidebar-foreground: #ffffff;
+  --sidebar-accent: var(--brand-blue);
   --surface-sunken: oklch(0.93 0 0);
 }
 
@@ -56,8 +66,8 @@ html {
   --muted-foreground: oklch(0.708 0 0);
   --accent: oklch(0.269 0 0);
   --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --destructive-foreground: oklch(0.985 0 0);
+  --destructive: var(--brand-red);
+  --destructive-foreground: #ffffff;
   --success: oklch(0.7 0.15 145);
   --success-foreground: oklch(0.145 0 0);
   --warning: oklch(0.8 0.16 75);
@@ -96,6 +106,7 @@ html {
   --color-ring: var(--ring);
   --color-sidebar: var(--sidebar);
   --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
   --color-surface-sunken: var(--surface-sunken);
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);

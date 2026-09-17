@@ -20,7 +20,7 @@ function StatCard({
       href={href}
       className="bg-muted hover:bg-muted/70 flex flex-col gap-2 rounded-lg p-5 transition-colors"
     >
-      <span className="text-xs font-semibold tracking-wide text-orange-600 uppercase dark:text-orange-400">
+      <span className="text-destructive text-xs font-semibold tracking-wide uppercase">
         {label}
       </span>
       <span className="text-3xl font-bold tabular-nums">{value}</span>
