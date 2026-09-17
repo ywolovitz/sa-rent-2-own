@@ -64,6 +64,7 @@ export function AppShell({
             type="button"
             variant="ghost"
             size="icon"
+            className="text-sidebar-foreground hover:bg-white/10 hover:text-sidebar-foreground"
             onClick={toggleCollapsed}
             aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
           >

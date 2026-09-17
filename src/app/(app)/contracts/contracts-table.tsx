@@ -108,10 +108,10 @@ export function ContractsTable({
           placeholder="Search vehicle or client…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="max-w-xs"
+          className="bg-background max-w-xs"
         />
         <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as "all" | ContractStatus)}>
-          <SelectTrigger className="w-44">
+          <SelectTrigger className="bg-background w-44">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -124,7 +124,7 @@ export function ContractsTable({
           </SelectContent>
         </Select>
         <Select value={typeFilter} onValueChange={(v) => setTypeFilter(v as "all" | ContractType)}>
-          <SelectTrigger className="w-48">
+          <SelectTrigger className="bg-background w-48">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -149,8 +149,8 @@ export function ContractsTable({
         </p>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto rounded-lg border bg-background">
-        <Table>
+      <div className="min-h-0 flex-1 overflow-auto rounded-lg border bg-background">
+        <Table containerClassName="overflow-x-visible">
           <TableHeader className="bg-background sticky top-0 z-10">
             <TableRow>
               <SortableHead label="Vehicle" sortKey="vehicle" activeKey={sortKey} direction={sortDir} onSort={onSort} />

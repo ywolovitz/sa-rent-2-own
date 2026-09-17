@@ -63,10 +63,10 @@ export function ClientsTable({ rows }: { rows: ClientWithBanking[] }) {
           placeholder="Search name, cell, ID number…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="max-w-xs"
+          className="bg-background max-w-xs"
         />
         <Select value={bankingFilter} onValueChange={(v) => setBankingFilter(v as BankingFilter)}>
-          <SelectTrigger className="w-52">
+          <SelectTrigger className="bg-background w-52">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -82,8 +82,8 @@ export function ClientsTable({ rows }: { rows: ClientWithBanking[] }) {
         </p>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto rounded-lg border bg-background">
-        <Table>
+      <div className="min-h-0 flex-1 overflow-auto rounded-lg border bg-background">
+        <Table containerClassName="overflow-x-visible">
           <TableHeader className="bg-background sticky top-0 z-10">
             <TableRow>
               <SortableHead label="Name" sortKey="name" activeKey={sortKey} direction={sortDir} onSort={onSort} />

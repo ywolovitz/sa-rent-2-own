@@ -30,11 +30,9 @@ export function SidebarNav({ role, collapsed }: { role: UserRole; collapsed?: bo
               href={item.href}
               title={collapsed ? item.label : undefined}
               className={cn(
-                "flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                "flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium text-white/70 transition-colors",
                 collapsed && "justify-center px-2",
-                isActive
-                  ? "bg-secondary text-secondary-foreground"
-                  : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                isActive ? "bg-white/15 text-white" : "hover:bg-white/10 hover:text-white"
               )}
             >
               <Icon className="size-4 shrink-0" />
