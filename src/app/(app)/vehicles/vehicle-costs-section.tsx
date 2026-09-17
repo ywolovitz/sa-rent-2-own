@@ -275,7 +275,7 @@ export function VehicleCostsSection({
       )}
 
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as TabValue)}>
-        <TabsList className="flex-wrap">
+        <TabsList className="h-auto flex-wrap justify-start">
           <TabsTrigger value="all">All</TabsTrigger>
           {vehicleCostTypeValues.map((t) => (
             <TabsTrigger key={t} value={t}>
