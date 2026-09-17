@@ -15,7 +15,7 @@ const NAV_ITEMS = [
   { href: "/admin/users", label: "Staff", icon: ShieldCheck, roles: ["admin"] },
 ] as const;
 
-export function SidebarNav({ role }: { role: UserRole }) {
+export function SidebarNav({ role, collapsed }: { role: UserRole; collapsed?: boolean }) {
   const pathname = usePathname();
 
   return (
@@ -28,15 +28,17 @@ export function SidebarNav({ role }: { role: UserRole }) {
             <Link
               key={item.href}
               href={item.href}
+              title={collapsed ? item.label : undefined}
               className={cn(
                 "flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                collapsed && "justify-center px-2",
                 isActive
                   ? "bg-secondary text-secondary-foreground"
                   : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
               )}
             >
-              <Icon className="size-4" />
-              {item.label}
+              <Icon className="size-4 shrink-0" />
+              {!collapsed && item.label}
             </Link>
           );
         }

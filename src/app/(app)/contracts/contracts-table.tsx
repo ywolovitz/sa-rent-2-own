@@ -102,7 +102,7 @@ export function ContractsTable({
   });
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex min-h-0 flex-1 flex-col gap-4">
       <div className="flex flex-wrap items-center gap-3">
         <Input
           placeholder="Search vehicle or client…"
@@ -149,9 +149,9 @@ export function ContractsTable({
         </p>
       </div>
 
-      <div className="rounded-lg border bg-background">
+      <div className="min-h-0 flex-1 overflow-y-auto rounded-lg border bg-background">
         <Table>
-          <TableHeader>
+          <TableHeader className="bg-background sticky top-0 z-10">
             <TableRow>
               <SortableHead label="Vehicle" sortKey="vehicle" activeKey={sortKey} direction={sortDir} onSort={onSort} />
               <SortableHead label="Client" sortKey="client" activeKey={sortKey} direction={sortDir} onSort={onSort} />

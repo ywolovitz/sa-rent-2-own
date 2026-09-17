@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/auth/current-profile";
+import { FleetStatsCards } from "@/components/dashboard/fleet-stats-cards";
 import { vehicleStatusValues } from "./schema";
 
 import { VehiclePanel } from "./vehicle-panel";
@@ -70,11 +71,13 @@ export default async function VehiclesPage({ searchParams }: PageProps<"/vehicle
   }));
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex h-full min-h-0 flex-col gap-4">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold tracking-tight">Vehicles</h1>
         {canManage && <VehiclePanel />}
       </div>
+
+      <FleetStatsCards />
 
       <VehiclesTable
         rows={rows}
