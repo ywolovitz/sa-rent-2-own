@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useState } from "react";
-import { X } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -15,7 +14,7 @@ import {
 } from "@/components/ui/select";
 import { SortableHead } from "@/components/ui/sortable-head";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { isoDaysFromNow } from "@/lib/date-ranges";
+import { daysUntil, formatDayCount, isoDaysFromNow } from "@/lib/date-ranges";
 import { compareNumbers, compareStrings, useTableControls } from "@/lib/use-table-controls";
 import type { VehicleStatus } from "@/lib/database.types";
 
@@ -47,21 +46,47 @@ const STATUS_LABELS: Record<VehicleStatus, string> = {
   written_off: "Written off",
 };
 
-type SortKey = "reg" | "model" | "status" | "client" | "nextService";
+function ServiceCountdown({ date }: { date: string | null }) {
+  if (!date) return <span className="text-muted-foreground">—</span>;
+  const diff = daysUntil(date);
+  if (diff === 0) return <span>Due today</span>;
+  const overdue = diff < 0;
+  return (
+    <span className={overdue ? "text-destructive font-medium" : undefined}>
+      {formatDayCount(Math.abs(diff))}
+    </span>
+  );
+}
+
+function ContractCountdown({ date }: { date: string | null }) {
+  if (!date) return <span className="text-muted-foreground">—</span>;
+  const diff = daysUntil(date);
+  const overdue = diff < 0;
+  return (
+    <span className={overdue ? "text-destructive font-medium" : undefined}>
+      {overdue ? "Ended" : formatDayCount(diff)}
+    </span>
+  );
+}
+
+type SortKey = "reg" | "model" | "status" | "client" | "nextService" | "monthsLeft";
 
 export function VehiclesTable({
   rows,
   canManage,
   initialStatus,
   initialServiceDueSoon,
+  initialContractEndingSoon,
 }: {
   rows: VehicleWithRegistration[];
   canManage: boolean;
   initialStatus?: VehicleStatus;
   initialServiceDueSoon?: boolean;
+  initialContractEndingSoon?: boolean;
 }) {
   const [statusFilter, setStatusFilter] = useState<"all" | VehicleStatus>(initialStatus ?? "all");
   const [serviceDueSoon, setServiceDueSoon] = useState(initialServiceDueSoon ?? false);
+  const [contractEndingSoon, setContractEndingSoon] = useState(initialContractEndingSoon ?? false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const searchFn = useCallback(
@@ -86,12 +111,23 @@ export function VehiclesTable({
         a.next_service_date ? Date.parse(a.next_service_date) : null,
         b.next_service_date ? Date.parse(b.next_service_date) : null
       ),
+    monthsLeft: (a: VehicleWithRegistration, b: VehicleWithRegistration) =>
+      compareNumbers(
+        a.current_contract_end_date ? Date.parse(a.current_contract_end_date) : null,
+        b.current_contract_end_date ? Date.parse(b.current_contract_end_date) : null
+      ),
   } satisfies Record<SortKey, (a: VehicleWithRegistration, b: VehicleWithRegistration) => number>;
 
   const serviceDueCutoff = isoDaysFromNow(30);
+  const contractEndingCutoff = isoDaysFromNow(30);
   const preFiltered = rows
     .filter((r) => statusFilter === "all" || r.status === statusFilter)
-    .filter((r) => !serviceDueSoon || (r.next_service_date && r.next_service_date <= serviceDueCutoff));
+    .filter((r) => !serviceDueSoon || (r.next_service_date && r.next_service_date <= serviceDueCutoff))
+    .filter(
+      (r) =>
+        !contractEndingSoon ||
+        (r.current_contract_end_date && r.current_contract_end_date <= contractEndingCutoff)
+    );
 
   const { search, setSearch, sortKey, sortDir, onSort, filteredRows } = useTableControls<
     VehicleWithRegistration,
@@ -125,15 +161,22 @@ export function VehiclesTable({
             ))}
           </SelectContent>
         </Select>
-        {serviceDueSoon && (
+        <Button
+          type="button"
+          variant={serviceDueSoon ? "default" : "outline"}
+          size="sm"
+          onClick={() => setServiceDueSoon((v) => !v)}
+        >
+          Due for service
+        </Button>
+        {canManage && (
           <Button
             type="button"
-            variant="secondary"
+            variant={contractEndingSoon ? "default" : "outline"}
             size="sm"
-            onClick={() => setServiceDueSoon(false)}
+            onClick={() => setContractEndingSoon((v) => !v)}
           >
-            Due within 30 days
-            <X />
+            Contract ending
           </Button>
         )}
         <p className="text-muted-foreground text-sm">
@@ -154,12 +197,21 @@ export function VehiclesTable({
                 <SortableHead label="Client" sortKey="client" activeKey={sortKey} direction={sortDir} onSort={onSort} />
               )}
               <SortableHead
-                label="Next service"
+                label="Next service in:"
                 sortKey="nextService"
                 activeKey={sortKey}
                 direction={sortDir}
                 onSort={onSort}
               />
+              {canManage && (
+                <SortableHead
+                  label="Months left"
+                  sortKey="monthsLeft"
+                  activeKey={sortKey}
+                  direction={sortDir}
+                  onSort={onSort}
+                />
+              )}
               {canManage && <TableHead className="w-24" />}
             </TableRow>
           </TableHeader>
@@ -178,7 +230,14 @@ export function VehiclesTable({
                   <Badge variant={STATUS_VARIANT[vehicle.status]}>{STATUS_LABELS[vehicle.status]}</Badge>
                 </TableCell>
                 {canManage && <TableCell>{vehicle.current_client_name ?? "—"}</TableCell>}
-                <TableCell>{vehicle.next_service_date ?? "—"}</TableCell>
+                <TableCell>
+                  <ServiceCountdown date={vehicle.next_service_date} />
+                </TableCell>
+                {canManage && (
+                  <TableCell>
+                    <ContractCountdown date={vehicle.current_contract_end_date} />
+                  </TableCell>
+                )}
                 {canManage && (
                   <TableCell
                     className="flex items-center justify-end gap-1"
@@ -200,7 +259,7 @@ export function VehiclesTable({
             ))}
             {filteredRows.length === 0 && (
               <TableRow>
-                <TableCell colSpan={6} className="text-muted-foreground text-center py-8">
+                <TableCell colSpan={canManage ? 7 : 4} className="text-muted-foreground text-center py-8">
                   No vehicles match your filters.
                 </TableCell>
               </TableRow>

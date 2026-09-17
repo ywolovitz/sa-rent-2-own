@@ -24,4 +24,5 @@ export interface VehicleWithRegistration {
   has_contract_file: boolean;
   current_plate: string | null;
   current_client_name: string | null;
+  current_contract_end_date: string | null;
 }

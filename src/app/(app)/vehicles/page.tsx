@@ -15,6 +15,7 @@ export default async function VehiclesPage({ searchParams }: PageProps<"/vehicle
   const statusParam = firstParam(params.status);
   const initialStatus = vehicleStatusValues.find((s) => s === statusParam);
   const initialServiceDueSoon = firstParam(params.service) === "due_soon";
+  const initialContractEndingSoon = firstParam(params.contract) === "ending_soon";
 
   const [profile, supabase] = await Promise.all([getCurrentProfile(), createClient()]);
   const canManage = profile?.role === "admin" || profile?.role === "manager";
@@ -39,10 +40,12 @@ export default async function VehiclesPage({ searchParams }: PageProps<"/vehicle
     canManage && vehicleIds.length
       ? supabase
           .from("contracts")
-          .select("vehicle_id, client_id")
+          .select("vehicle_id, client_id, end_date")
           .eq("status", "active")
           .in("vehicle_id", vehicleIds)
-      : Promise.resolve({ data: [] as { vehicle_id: string; client_id: string }[] }),
+      : Promise.resolve({
+          data: [] as { vehicle_id: string; client_id: string; end_date: string | null }[],
+        }),
   ]);
 
   const clientIds = (activeContracts ?? []).map((c) => c.client_id);
@@ -55,11 +58,15 @@ export default async function VehiclesPage({ searchParams }: PageProps<"/vehicle
   const clientByVehicle = new Map(
     (activeContracts ?? []).map((c) => [c.vehicle_id, clientNameById.get(c.client_id) ?? null])
   );
+  const contractEndByVehicle = new Map(
+    (activeContracts ?? []).map((c) => [c.vehicle_id, c.end_date])
+  );
 
   const rows: VehicleWithRegistration[] = (vehicles ?? []).map((v) => ({
     ...v,
     current_plate: plateByVehicle.get(v.id) ?? null,
     current_client_name: clientByVehicle.get(v.id) ?? null,
+    current_contract_end_date: contractEndByVehicle.get(v.id) ?? null,
   }));
 
   return (
@@ -74,6 +81,7 @@ export default async function VehiclesPage({ searchParams }: PageProps<"/vehicle
         canManage={canManage}
         initialStatus={initialStatus}
         initialServiceDueSoon={initialServiceDueSoon}
+        initialContractEndingSoon={initialContractEndingSoon}
       />
     </div>
   );
