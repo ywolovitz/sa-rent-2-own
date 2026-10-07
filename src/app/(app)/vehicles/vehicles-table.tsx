@@ -144,6 +144,7 @@ type ColumnId =
   | "vin"
   | "engineNumber"
   | "status"
+  | "legacyStatusNote"
   | "client"
   | "nextService"
   | "monthsLeft"
@@ -178,6 +179,7 @@ const DEFAULT_COLUMN_ORDER: ColumnId[] = [
   "vin",
   "engineNumber",
   "status",
+  "legacyStatusNote",
   "client",
   "nextService",
   "monthsLeft",
@@ -206,6 +208,7 @@ const DEFAULT_COLUMN_ORDER: ColumnId[] = [
 // New columns default to hidden (still toggleable via the Columns menu) so
 // the existing default view doesn't suddenly balloon to 30+ columns.
 const DEFAULT_HIDDEN_COLUMNS: ColumnId[] = [
+  "legacyStatusNote",
   "currentMileage",
   "nextServiceKm",
   "lastServicedBy",
@@ -238,6 +241,7 @@ const COLUMN_LABELS: Record<ColumnId, string> = {
   vin: "VIN",
   engineNumber: "Engine no",
   status: "Status",
+  legacyStatusNote: "Status/location note",
   client: "Client",
   nextService: "Next service in:",
   monthsLeft: "Months left",
@@ -298,6 +302,8 @@ function renderCell(column: ColumnId, vehicle: VehicleWithRegistration) {
       return vehicle.engine_number ?? "—";
     case "status":
       return <Badge variant={STATUS_VARIANT[vehicle.status]}>{STATUS_LABELS[vehicle.status]}</Badge>;
+    case "legacyStatusNote":
+      return vehicle.legacy_status_note ?? "—";
     case "client":
       return vehicle.current_client_name ?? "—";
     case "nextService":
@@ -369,6 +375,8 @@ function exportValue(column: ColumnId, vehicle: VehicleWithRegistration): string
       return vehicle.engine_number ?? "";
     case "status":
       return STATUS_LABELS[vehicle.status];
+    case "legacyStatusNote":
+      return vehicle.legacy_status_note ?? "";
     case "client":
       return vehicle.current_client_name ?? "";
     case "nextService":
@@ -490,6 +498,7 @@ export function VehiclesTable({
     vin: (a, b) => compareStrings(a.vin, b.vin),
     engineNumber: (a, b) => compareStrings(a.engine_number, b.engine_number),
     status: (a, b) => compareStrings(a.status, b.status),
+    legacyStatusNote: (a, b) => compareStrings(a.legacy_status_note, b.legacy_status_note),
     client: (a, b) => compareStrings(a.current_client_name, b.current_client_name),
     nextService: (a, b) =>
       compareNumbers(

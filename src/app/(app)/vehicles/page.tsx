@@ -25,7 +25,7 @@ export default async function VehiclesPage({ searchParams }: PageProps<"/vehicle
   const { data: vehicles } = await supabase
     .from("vehicles")
     .select(
-      "id, file_no, make, model, year, colour, vin, engine_number, status, current_mileage, next_service_km, next_service_date, last_serviced_by, tracker_supplier, tracker_running, natis_on_file, license_disc_expiry, has_spare_key, warranty_active, warranty_notes, has_contract_file"
+      "id, file_no, make, model, year, colour, vin, engine_number, status, legacy_status_note, current_mileage, next_service_km, next_service_date, last_serviced_by, tracker_supplier, tracker_running, natis_on_file, license_disc_expiry, has_spare_key, warranty_active, warranty_notes, has_contract_file"
     )
     .order("file_no");
 

@@ -10,6 +10,7 @@ export interface VehicleWithRegistration {
   vin: string | null;
   engine_number: string | null;
   status: VehicleStatus;
+  legacy_status_note: string | null;
   current_mileage: number | null;
   next_service_km: number | null;
   next_service_date: string | null;
