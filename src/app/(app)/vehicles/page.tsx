@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/auth/current-profile";
 import { FleetStatsCards } from "@/components/dashboard/fleet-stats-cards";
+import type { PaymentMethod } from "@/lib/database.types";
 import { vehicleStatusValues } from "./schema";
 
 import { VehiclePanel } from "./vehicle-panel";
@@ -30,45 +31,94 @@ export default async function VehiclesPage({ searchParams }: PageProps<"/vehicle
 
   const vehicleIds = (vehicles ?? []).map((v) => v.id);
 
-  const [{ data: registrations }, { data: activeContracts }] = await Promise.all([
-    vehicleIds.length
-      ? supabase
-          .from("vehicle_registrations")
-          .select("vehicle_id, plate_number")
-          .in("vehicle_id", vehicleIds)
-          .is("effective_to", null)
-      : Promise.resolve({ data: [] as { vehicle_id: string; plate_number: string }[] }),
-    canManage && vehicleIds.length
-      ? supabase
-          .from("contracts")
-          .select("vehicle_id, client_id, end_date")
-          .eq("status", "active")
-          .in("vehicle_id", vehicleIds)
-      : Promise.resolve({
-          data: [] as { vehicle_id: string; client_id: string; end_date: string | null }[],
-        }),
-  ]);
+  interface ActiveContractRow {
+    vehicle_id: string;
+    client_id: string;
+    start_date: string;
+    end_date: string | null;
+    installment_amount: number | null;
+    payment_method: PaymentMethod;
+    potential_sale_price: number | null;
+    purchase_price: number | null;
+    total_collected: number;
+    residual_value: number | null;
+    is_paid_up: boolean;
+  }
+  interface PastContractRow {
+    vehicle_id: string;
+    client_id: string;
+  }
 
-  const clientIds = (activeContracts ?? []).map((c) => c.client_id);
+  const [{ data: registrations }, { data: activeContracts }, { data: pastContracts }] =
+    await Promise.all([
+      vehicleIds.length
+        ? supabase
+            .from("vehicle_registrations")
+            .select("vehicle_id, plate_number")
+            .in("vehicle_id", vehicleIds)
+            .is("effective_to", null)
+        : Promise.resolve({ data: [] as { vehicle_id: string; plate_number: string }[] }),
+      canManage && vehicleIds.length
+        ? supabase
+            .from("contracts")
+            .select(
+              "vehicle_id, client_id, start_date, end_date, installment_amount, payment_method, potential_sale_price, purchase_price, total_collected, residual_value, is_paid_up"
+            )
+            .eq("status", "active")
+            .in("vehicle_id", vehicleIds)
+        : Promise.resolve({ data: [] as ActiveContractRow[] }),
+      canManage && vehicleIds.length
+        ? supabase
+            .from("contracts")
+            .select("vehicle_id, client_id")
+            .neq("status", "active")
+            .in("vehicle_id", vehicleIds)
+        : Promise.resolve({ data: [] as PastContractRow[] }),
+    ]);
+
+  const clientIds = Array.from(
+    new Set([
+      ...(activeContracts ?? []).map((c) => c.client_id),
+      ...(pastContracts ?? []).map((c) => c.client_id),
+    ])
+  );
   const { data: clients } = clientIds.length
-    ? await supabase.from("clients").select("id, full_name").in("id", clientIds)
-    : { data: [] as { id: string; full_name: string }[] };
+    ? await supabase.from("clients").select("id, full_name, cell_number").in("id", clientIds)
+    : { data: [] as { id: string; full_name: string; cell_number: string }[] };
 
-  const clientNameById = new Map((clients ?? []).map((c) => [c.id, c.full_name]));
+  const clientById = new Map((clients ?? []).map((c) => [c.id, c]));
   const plateByVehicle = new Map((registrations ?? []).map((r) => [r.vehicle_id, r.plate_number]));
-  const clientByVehicle = new Map(
-    (activeContracts ?? []).map((c) => [c.vehicle_id, clientNameById.get(c.client_id) ?? null])
-  );
-  const contractEndByVehicle = new Map(
-    (activeContracts ?? []).map((c) => [c.vehicle_id, c.end_date])
-  );
+  const activeContractByVehicle = new Map((activeContracts ?? []).map((c) => [c.vehicle_id, c]));
 
-  const rows: VehicleWithRegistration[] = (vehicles ?? []).map((v) => ({
-    ...v,
-    current_plate: plateByVehicle.get(v.id) ?? null,
-    current_client_name: clientByVehicle.get(v.id) ?? null,
-    current_contract_end_date: contractEndByVehicle.get(v.id) ?? null,
-  }));
+  const pastClientNamesByVehicle = new Map<string, string[]>();
+  for (const c of pastContracts ?? []) {
+    const name = clientById.get(c.client_id)?.full_name;
+    if (!name) continue;
+    const names = pastClientNamesByVehicle.get(c.vehicle_id) ?? [];
+    if (!names.includes(name)) names.push(name);
+    pastClientNamesByVehicle.set(c.vehicle_id, names);
+  }
+
+  const rows: VehicleWithRegistration[] = (vehicles ?? []).map((v) => {
+    const activeContract = activeContractByVehicle.get(v.id);
+    const client = activeContract ? clientById.get(activeContract.client_id) : undefined;
+    return {
+      ...v,
+      current_plate: plateByVehicle.get(v.id) ?? null,
+      current_client_name: client?.full_name ?? null,
+      current_client_cell: client?.cell_number ?? null,
+      current_contract_start_date: activeContract?.start_date ?? null,
+      current_contract_end_date: activeContract?.end_date ?? null,
+      current_installment_amount: activeContract?.installment_amount ?? null,
+      current_payment_method: activeContract?.payment_method ?? null,
+      current_potential_sale_price: activeContract?.potential_sale_price ?? null,
+      current_purchase_price: activeContract?.purchase_price ?? null,
+      current_total_collected: activeContract?.total_collected ?? null,
+      current_residual_value: activeContract?.residual_value ?? null,
+      current_is_paid_up: activeContract?.is_paid_up ?? null,
+      past_client_names: pastClientNamesByVehicle.get(v.id)?.join(", ") ?? null,
+    };
+  });
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-4">

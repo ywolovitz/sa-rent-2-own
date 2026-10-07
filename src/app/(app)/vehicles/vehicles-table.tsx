@@ -34,7 +34,8 @@ import { daysUntil, formatDayCount, isoDaysFromNow } from "@/lib/date-ranges";
 import { exportToExcel, summarizeFilters, type ExportColumn } from "@/lib/export-to-excel";
 import { useColumnOrder } from "@/lib/use-column-order";
 import { compareNumbers, compareStrings, useTableControls } from "@/lib/use-table-controls";
-import type { VehicleStatus } from "@/lib/database.types";
+import { formatSaPhoneForDisplay } from "@/lib/phone";
+import type { PaymentMethod, TrackerStatus, VehicleStatus } from "@/lib/database.types";
 
 import { vehicleStatusValues } from "./schema";
 import { DeleteVehicleButton } from "./delete-vehicle-button";
@@ -73,6 +74,32 @@ const STATUS_CHIP_COLORS: Record<VehicleStatus, { fill: string; font?: string }>
   sold: { fill: "FFE5E5E5", font: "FF1F1F1F" },
   written_off: { fill: "FFFF5252" },
 };
+
+const TRACKER_LABELS: Record<TrackerStatus, string> = {
+  yes: "Yes",
+  no: "No",
+  no_info: "No info",
+};
+
+const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
+  eft: "EFT",
+  cash: "Cash",
+  other: "Other",
+};
+
+const PAID_CHIP_COLORS = {
+  yes: { fill: "FF2F9E58" },
+  no: { fill: "FFFF5252" },
+};
+
+function formatMoney(amount: number | null): string {
+  return amount != null ? `R${amount.toLocaleString()}` : "—";
+}
+
+function formatYesNo(value: boolean | null): string {
+  if (value === null) return "—";
+  return value ? "Yes" : "No";
+}
 
 function formatServiceCountdown(date: string | null): string {
   if (!date) return "—";
@@ -119,7 +146,27 @@ type ColumnId =
   | "status"
   | "client"
   | "nextService"
-  | "monthsLeft";
+  | "monthsLeft"
+  | "currentMileage"
+  | "nextServiceKm"
+  | "lastServicedBy"
+  | "trackerRunning"
+  | "trackerSupplier"
+  | "natis"
+  | "spareKey"
+  | "contractFile"
+  | "warranty"
+  | "licenseDiscExpiry"
+  | "clientCell"
+  | "pastClients"
+  | "installment"
+  | "paymentMethod"
+  | "potentialSalePrice"
+  | "purchasePrice"
+  | "purchaseDate"
+  | "totalCollected"
+  | "residualValue"
+  | "paidUp";
 
 const DEFAULT_COLUMN_ORDER: ColumnId[] = [
   "reg",
@@ -134,6 +181,51 @@ const DEFAULT_COLUMN_ORDER: ColumnId[] = [
   "client",
   "nextService",
   "monthsLeft",
+  "currentMileage",
+  "nextServiceKm",
+  "lastServicedBy",
+  "trackerRunning",
+  "trackerSupplier",
+  "natis",
+  "spareKey",
+  "contractFile",
+  "warranty",
+  "licenseDiscExpiry",
+  "clientCell",
+  "pastClients",
+  "installment",
+  "paymentMethod",
+  "potentialSalePrice",
+  "purchasePrice",
+  "purchaseDate",
+  "totalCollected",
+  "residualValue",
+  "paidUp",
+];
+
+// New columns default to hidden (still toggleable via the Columns menu) so
+// the existing default view doesn't suddenly balloon to 30+ columns.
+const DEFAULT_HIDDEN_COLUMNS: ColumnId[] = [
+  "currentMileage",
+  "nextServiceKm",
+  "lastServicedBy",
+  "trackerRunning",
+  "trackerSupplier",
+  "natis",
+  "spareKey",
+  "contractFile",
+  "warranty",
+  "licenseDiscExpiry",
+  "clientCell",
+  "pastClients",
+  "installment",
+  "paymentMethod",
+  "potentialSalePrice",
+  "purchasePrice",
+  "purchaseDate",
+  "totalCollected",
+  "residualValue",
+  "paidUp",
 ];
 
 const COLUMN_LABELS: Record<ColumnId, string> = {
@@ -149,9 +241,42 @@ const COLUMN_LABELS: Record<ColumnId, string> = {
   client: "Client",
   nextService: "Next service in:",
   monthsLeft: "Months left",
+  currentMileage: "Current mileage",
+  nextServiceKm: "Next service km",
+  lastServicedBy: "Last serviced by",
+  trackerRunning: "Tracker running",
+  trackerSupplier: "Tracker supplier",
+  natis: "NATIS",
+  spareKey: "Spare key",
+  contractFile: "Contract on file",
+  warranty: "Warranty",
+  licenseDiscExpiry: "License disc expiry",
+  clientCell: "Client cell",
+  pastClients: "Past clients",
+  installment: "Installment",
+  paymentMethod: "Payment method",
+  potentialSalePrice: "Potential sale price",
+  purchasePrice: "Purchase price",
+  purchaseDate: "Purchase date",
+  totalCollected: "Total collected",
+  residualValue: "RV",
+  paidUp: "Paid",
 };
 
-const MANAGER_ONLY_COLUMNS = new Set<ColumnId>(["client", "monthsLeft"]);
+const MANAGER_ONLY_COLUMNS = new Set<ColumnId>([
+  "client",
+  "monthsLeft",
+  "clientCell",
+  "pastClients",
+  "installment",
+  "paymentMethod",
+  "potentialSalePrice",
+  "purchasePrice",
+  "purchaseDate",
+  "totalCollected",
+  "residualValue",
+  "paidUp",
+]);
 
 function renderCell(column: ColumnId, vehicle: VehicleWithRegistration) {
   switch (column) {
@@ -179,6 +304,48 @@ function renderCell(column: ColumnId, vehicle: VehicleWithRegistration) {
       return <ServiceCountdown date={vehicle.next_service_date} />;
     case "monthsLeft":
       return <ContractCountdown date={vehicle.current_contract_end_date} />;
+    case "currentMileage":
+      return vehicle.current_mileage?.toLocaleString() ?? "—";
+    case "nextServiceKm":
+      return vehicle.next_service_km?.toLocaleString() ?? "—";
+    case "lastServicedBy":
+      return vehicle.last_serviced_by ?? "—";
+    case "trackerRunning":
+      return TRACKER_LABELS[vehicle.tracker_running];
+    case "trackerSupplier":
+      return vehicle.tracker_supplier ?? "—";
+    case "natis":
+      return vehicle.natis_on_file ? "On file" : "Missing";
+    case "spareKey":
+      return formatYesNo(vehicle.has_spare_key);
+    case "contractFile":
+      return formatYesNo(vehicle.has_contract_file);
+    case "warranty":
+      return vehicle.warranty_active ? "Active" : "Inactive";
+    case "licenseDiscExpiry":
+      return vehicle.license_disc_expiry ?? "—";
+    case "clientCell":
+      return vehicle.current_client_cell
+        ? formatSaPhoneForDisplay(vehicle.current_client_cell)
+        : "—";
+    case "pastClients":
+      return vehicle.past_client_names ?? "—";
+    case "installment":
+      return formatMoney(vehicle.current_installment_amount);
+    case "paymentMethod":
+      return vehicle.current_payment_method ? PAYMENT_METHOD_LABELS[vehicle.current_payment_method] : "—";
+    case "potentialSalePrice":
+      return formatMoney(vehicle.current_potential_sale_price);
+    case "purchasePrice":
+      return formatMoney(vehicle.current_purchase_price);
+    case "purchaseDate":
+      return vehicle.current_contract_start_date ?? "—";
+    case "totalCollected":
+      return formatMoney(vehicle.current_total_collected);
+    case "residualValue":
+      return formatMoney(vehicle.current_residual_value);
+    case "paidUp":
+      return formatYesNo(vehicle.current_is_paid_up);
   }
 }
 
@@ -208,6 +375,46 @@ function exportValue(column: ColumnId, vehicle: VehicleWithRegistration): string
       return formatServiceCountdown(vehicle.next_service_date);
     case "monthsLeft":
       return formatContractCountdown(vehicle.current_contract_end_date);
+    case "currentMileage":
+      return vehicle.current_mileage ?? "";
+    case "nextServiceKm":
+      return vehicle.next_service_km ?? "";
+    case "lastServicedBy":
+      return vehicle.last_serviced_by ?? "";
+    case "trackerRunning":
+      return TRACKER_LABELS[vehicle.tracker_running];
+    case "trackerSupplier":
+      return vehicle.tracker_supplier ?? "";
+    case "natis":
+      return vehicle.natis_on_file ? "On file" : "Missing";
+    case "spareKey":
+      return formatYesNo(vehicle.has_spare_key);
+    case "contractFile":
+      return formatYesNo(vehicle.has_contract_file);
+    case "warranty":
+      return vehicle.warranty_active ? "Active" : "Inactive";
+    case "licenseDiscExpiry":
+      return vehicle.license_disc_expiry ?? "";
+    case "clientCell":
+      return vehicle.current_client_cell ? formatSaPhoneForDisplay(vehicle.current_client_cell) : "";
+    case "pastClients":
+      return vehicle.past_client_names ?? "";
+    case "installment":
+      return vehicle.current_installment_amount ?? "";
+    case "paymentMethod":
+      return vehicle.current_payment_method ? PAYMENT_METHOD_LABELS[vehicle.current_payment_method] : "";
+    case "potentialSalePrice":
+      return vehicle.current_potential_sale_price ?? "";
+    case "purchasePrice":
+      return vehicle.current_purchase_price ?? "";
+    case "purchaseDate":
+      return vehicle.current_contract_start_date ?? "";
+    case "totalCollected":
+      return vehicle.current_total_collected ?? "";
+    case "residualValue":
+      return vehicle.current_residual_value ?? "";
+    case "paidUp":
+      return formatYesNo(vehicle.current_is_paid_up);
   }
 }
 
@@ -233,7 +440,8 @@ export function VehiclesTable({
 
   const { order, isHidden, reorder, toggleHidden, reset } = useColumnOrder(
     "sar2o:vehicles-columns",
-    DEFAULT_COLUMN_ORDER
+    DEFAULT_COLUMN_ORDER,
+    DEFAULT_HIDDEN_COLUMNS
   );
 
   const sensors = useSensors(
@@ -257,7 +465,16 @@ export function VehiclesTable({
 
   const searchFn = useCallback(
     (row: VehicleWithRegistration, query: string) =>
-      [row.current_plate, row.file_no, row.make, row.model, row.vin, row.current_client_name]
+      [
+        row.current_plate,
+        row.file_no,
+        row.make,
+        row.model,
+        row.vin,
+        row.current_client_name,
+        row.current_client_cell,
+        row.past_client_names,
+      ]
         .filter(Boolean)
         .some((value) => value!.toLowerCase().includes(query)),
     []
@@ -284,6 +501,39 @@ export function VehiclesTable({
         a.current_contract_end_date ? Date.parse(a.current_contract_end_date) : null,
         b.current_contract_end_date ? Date.parse(b.current_contract_end_date) : null
       ),
+    currentMileage: (a, b) => compareNumbers(a.current_mileage, b.current_mileage),
+    nextServiceKm: (a, b) => compareNumbers(a.next_service_km, b.next_service_km),
+    lastServicedBy: (a, b) => compareStrings(a.last_serviced_by, b.last_serviced_by),
+    trackerRunning: (a, b) => compareStrings(a.tracker_running, b.tracker_running),
+    trackerSupplier: (a, b) => compareStrings(a.tracker_supplier, b.tracker_supplier),
+    natis: (a, b) => compareNumbers(Number(a.natis_on_file), Number(b.natis_on_file)),
+    spareKey: (a, b) => compareNumbers(Number(a.has_spare_key), Number(b.has_spare_key)),
+    contractFile: (a, b) => compareNumbers(Number(a.has_contract_file), Number(b.has_contract_file)),
+    warranty: (a, b) => compareNumbers(Number(a.warranty_active), Number(b.warranty_active)),
+    licenseDiscExpiry: (a, b) =>
+      compareNumbers(
+        a.license_disc_expiry ? Date.parse(a.license_disc_expiry) : null,
+        b.license_disc_expiry ? Date.parse(b.license_disc_expiry) : null
+      ),
+    clientCell: (a, b) => compareStrings(a.current_client_cell, b.current_client_cell),
+    pastClients: (a, b) => compareStrings(a.past_client_names, b.past_client_names),
+    installment: (a, b) => compareNumbers(a.current_installment_amount, b.current_installment_amount),
+    paymentMethod: (a, b) => compareStrings(a.current_payment_method, b.current_payment_method),
+    potentialSalePrice: (a, b) =>
+      compareNumbers(a.current_potential_sale_price, b.current_potential_sale_price),
+    purchasePrice: (a, b) => compareNumbers(a.current_purchase_price, b.current_purchase_price),
+    purchaseDate: (a, b) =>
+      compareNumbers(
+        a.current_contract_start_date ? Date.parse(a.current_contract_start_date) : null,
+        b.current_contract_start_date ? Date.parse(b.current_contract_start_date) : null
+      ),
+    totalCollected: (a, b) => compareNumbers(a.current_total_collected, b.current_total_collected),
+    residualValue: (a, b) => compareNumbers(a.current_residual_value, b.current_residual_value),
+    paidUp: (a, b) =>
+      compareNumbers(
+        a.current_is_paid_up === null ? null : Number(a.current_is_paid_up),
+        b.current_is_paid_up === null ? null : Number(b.current_is_paid_up)
+      ),
   };
 
   const serviceDueCutoff = isoDaysFromNow(30);
@@ -307,12 +557,32 @@ export function VehiclesTable({
     defaultSortKey: "nextService",
   });
 
+  const MONEY_COLUMNS = new Set<ColumnId>([
+    "installment",
+    "potentialSalePrice",
+    "purchasePrice",
+    "totalCollected",
+    "residualValue",
+  ]);
+  const NUMBER_COLUMNS = new Set<ColumnId>(["currentMileage", "nextServiceKm"]);
+
   function handleExport() {
     const columns: ExportColumn<VehicleWithRegistration>[] = visibleColumns.map((column) => ({
       header: COLUMN_LABELS[column],
       value: (vehicle) => exportValue(column, vehicle),
-      align: column === "year" ? "right" : undefined,
-      chip: column === "status" ? (vehicle) => STATUS_CHIP_COLORS[vehicle.status] : undefined,
+      align: column === "year" || MONEY_COLUMNS.has(column) || NUMBER_COLUMNS.has(column) ? "right" : undefined,
+      numberFormat: MONEY_COLUMNS.has(column) ? '"R"#,##0.00' : undefined,
+      chip:
+        column === "status"
+          ? (vehicle) => STATUS_CHIP_COLORS[vehicle.status]
+          : column === "paidUp"
+            ? (vehicle) =>
+                vehicle.current_is_paid_up === null
+                  ? undefined
+                  : vehicle.current_is_paid_up
+                    ? PAID_CHIP_COLORS.yes
+                    : PAID_CHIP_COLORS.no
+            : undefined,
     }));
 
     exportToExcel({

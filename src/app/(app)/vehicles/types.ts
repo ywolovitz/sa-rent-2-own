@@ -1,4 +1,4 @@
-import type { TrackerStatus, VehicleStatus } from "@/lib/database.types";
+import type { PaymentMethod, TrackerStatus, VehicleStatus } from "@/lib/database.types";
 
 export interface VehicleWithRegistration {
   id: string;
@@ -24,5 +24,15 @@ export interface VehicleWithRegistration {
   has_contract_file: boolean;
   current_plate: string | null;
   current_client_name: string | null;
+  current_client_cell: string | null;
+  current_contract_start_date: string | null;
   current_contract_end_date: string | null;
+  current_installment_amount: number | null;
+  current_payment_method: PaymentMethod | null;
+  current_potential_sale_price: number | null;
+  current_purchase_price: number | null;
+  current_total_collected: number | null;
+  current_residual_value: number | null;
+  current_is_paid_up: boolean | null;
+  past_client_names: string | null;
 }
