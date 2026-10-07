@@ -1,8 +1,10 @@
 "use client";
 
 import { useCallback, useState } from "react";
+import { Download } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -13,6 +15,7 @@ import {
 } from "@/components/ui/select";
 import { SortableHead } from "@/components/ui/sortable-head";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { exportRowsToExcel } from "@/lib/export-to-excel";
 import { formatSaPhoneForDisplay } from "@/lib/phone";
 import { compareStrings, useTableControls } from "@/lib/use-table-controls";
 
@@ -22,6 +25,12 @@ import type { ClientWithBanking } from "./types";
 
 type BankingFilter = "all" | "has" | "none";
 type SortKey = "name" | "cell" | "idNumber";
+
+function bankingLabel(client: ClientWithBanking): string {
+  return client.banking
+    ? `${client.banking.bank_name} •••• ${client.banking.account_number_last4}`
+    : "None on file";
+}
 
 export function ClientsTable({ rows }: { rows: ClientWithBanking[] }) {
   const [bankingFilter, setBankingFilter] = useState<BankingFilter>("all");
@@ -75,6 +84,26 @@ export function ClientsTable({ rows }: { rows: ClientWithBanking[] }) {
             <SelectItem value="none">No banking on file</SelectItem>
           </SelectContent>
         </Select>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() =>
+            exportRowsToExcel(
+              "clients",
+              "Clients",
+              filteredRows.map((client) => ({
+                Name: client.full_name,
+                "Cell number": formatSaPhoneForDisplay(client.cell_number),
+                "ID number": client.id_number ?? "",
+                Banking: bankingLabel(client),
+              }))
+            )
+          }
+        >
+          <Download />
+          Export
+        </Button>
         <p className="text-muted-foreground text-sm">
           {filteredRows.length === rows.length
             ? `${rows.length} on record`
@@ -111,11 +140,9 @@ export function ClientsTable({ rows }: { rows: ClientWithBanking[] }) {
                 <TableCell>{client.id_number ?? "—"}</TableCell>
                 <TableCell>
                   {client.banking ? (
-                    <Badge variant="secondary">
-                      {client.banking.bank_name} •••• {client.banking.account_number_last4}
-                    </Badge>
+                    <Badge variant="secondary">{bankingLabel(client)}</Badge>
                   ) : (
-                    <span className="text-muted-foreground">None on file</span>
+                    <span className="text-muted-foreground">{bankingLabel(client)}</span>
                   )}
                 </TableCell>
                 <TableCell

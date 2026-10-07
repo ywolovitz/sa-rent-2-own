@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useState } from "react";
-import { X } from "lucide-react";
+import { Download, X } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -16,6 +16,7 @@ import {
 import { SortableHead } from "@/components/ui/sortable-head";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { isoDaysFromNow } from "@/lib/date-ranges";
+import { exportRowsToExcel } from "@/lib/export-to-excel";
 import { compareNumbers, compareStrings, useTableControls } from "@/lib/use-table-controls";
 import type { ContractStatus, ContractType } from "@/lib/database.types";
 
@@ -142,6 +143,29 @@ export function ContractsTable({
             <X />
           </Button>
         )}
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() =>
+            exportRowsToExcel(
+              "contracts",
+              "Contracts",
+              filteredRows.map((row) => ({
+                Vehicle: row.vehicleLabel,
+                Client: row.clientName,
+                Type: TYPE_LABELS[row.contract_type],
+                Status: STATUS_LABELS[row.status],
+                Installment: row.installment_amount ?? "",
+                Arrears: row.arrears_amount,
+                "End date": row.end_date ?? "",
+              }))
+            )
+          }
+        >
+          <Download />
+          Export
+        </Button>
         <p className="text-muted-foreground text-sm">
           {filteredRows.length === rows.length
             ? `${rows.length} on record`
