@@ -1,28 +1,44 @@
 # SA Rent 2 Own — Fleet Management System
 
-Specification document, captured from initial planning discussion. This reflects the state of the design **before any migrations or code have been written** — treat it as the source of truth to build against, and update it as decisions change.
+Living specification document. Started from initial planning before any code existed; now kept in sync with what's actually built and deployed. Update it whenever a schema or design decision changes — treat it as the source of truth for *why* things are the way they are, not just a historical record.
+
+**Current status: live in production**, deployed on Vercel, actively used by the client. See [§9](#9-whats-built) for what's actually shipped and [§11](#11-open-items) for what's still outstanding.
 
 ## 1. Overview
 
-Internal web application to replace a OneDrive Excel workbook currently used to manage a rent-to-own vehicle fleet (registrations, clients, contracts, service history, and short-term rentals). Used by the business owner, managers, and technicians. Not public-facing. No integration with the separate legacy PHP business system — this is an independent, clean rebuild.
+Internal web application replacing a OneDrive Excel workbook used to manage a rent-to-own vehicle fleet (registrations, clients, contracts, service history, and short-term rentals). Used by the business owner, managers, and technicians. Not public-facing. No integration with the separate legacy PHP business system — this is an independent, clean rebuild.
 
-Core domains: vehicles, clients, rent-to-own and short-term-rental contracts, vehicle costs/service history, staff/technicians, and (in a later phase) WhatsApp-based automation and reporting.
+Core domains: vehicles, clients, rent-to-own and short-term-rental contracts, vehicle costs/service history, staff/technicians. Reporting/email notifications and WhatsApp-based automation are planned next phases (not yet built — see §11).
 
 ## 2. Tech Stack
 
 | Layer | Choice |
 |---|---|
-| Frontend | Next.js (App Router), React Server Components + Server Actions |
+| Frontend | Next.js 16 (App Router), React 19 Server Components + Server Actions |
 | Backend / DB | Supabase — Postgres, Supabase Auth, Row Level Security |
-| Styling / UI | Tailwind CSS + shadcn/ui |
-| File storage | Supabase Storage (private buckets, signed URLs) — invoices, contract files, documents |
-| Transactional email | Resend — auth-related notifications, reports |
-| PDF generation | Server-side PDF library (TBD — e.g. `@react-pdf/renderer`), rendered in a Route Handler / Edge Function |
-| Messaging / automation | Supabase Edge Functions calling WhatsApp Business API / Twilio (kept as a separate integration boundary) |
-| Access control | Supabase Auth (invite-only) + Postgres RLS + Next.js middleware for route gating |
-| Language / tooling | TypeScript throughout, Supabase CLI for local dev + migrations |
+| Styling / UI | Tailwind CSS v4 + hand-built shadcn/ui-style components, custom brand theme (§2.1) |
+| Drag-and-drop | `@dnd-kit` — used for the Vehicles table's reorderable columns |
+| Spreadsheet export | `exceljs` — styled `.xlsx` export (themed header, status chips, meta rows); `xlsx` (SheetJS) is kept only for the one-off local import script, since its free tier can't write cell styles |
+| File storage | Supabase Storage (private `vehicle-invoices` bucket, RLS-gated) |
+| Hosting | Vercel, deployed from the `main` branch (auto-deploy on push) |
+| Access control | Supabase Auth (invite-only, phone + password) + Postgres RLS + Next.js Proxy (`proxy.ts`, the Next 16 rename of middleware) for route gating |
+| Language / tooling | TypeScript throughout |
 
-Open (not yet pinned): specific PDF library, specific WhatsApp/Twilio provider setup (client's WhatsApp Business environment is not yet configured).
+Not yet built/chosen: transactional email (Resend is the plan — see §11), PDF generation, WhatsApp Business API / Twilio automation beyond the phone-auth OTP use case.
+
+### 2.1 Brand palette
+
+Fixed brand colors, defined as CSS custom properties in `src/app/globals.css` and reused as Tailwind theme tokens (`bg-sidebar`, `text-destructive`, etc.) rather than scattered as one-off hex values:
+
+| Token | Hex | Used for |
+|---|---|---|
+| `--brand-blue-dark` | `#0F6B93` | Sidebar background, Excel export header fill |
+| `--brand-blue` | `#007FA3` | Active sidebar nav item |
+| `--brand-red` | `#FF5252` | Destructive actions, overdue indicators, dashboard stat-card labels |
+| `--brand-grey` | `#9E9E9E` | Secondary/muted text |
+| `--brand-grey-light` | `#D6D6D6` | Borders, inputs |
+
+The sidebar keeps this identity fixed in both light and dark mode (it's a brand color, not a theme-relative one).
 
 ## 3. Source Data (from client's OneDrive workbook)
 
@@ -38,7 +54,7 @@ Access note: the OneDrive share link itself could not be opened (requires the cl
 | WAITING PAYOUT INSURANCE | 4 | Write-offs/stolen vehicles awaiting insurance payout |
 | COLLECTIONS | 149 | Arrears tracking: deal, vehicle, customer, deal end, installment, RV, outstanding, arrears, notes |
 
-Known data-quality issues driving the schema design below:
+Known data-quality issues that drove the schema design below:
 - `STATUS` on the main sheet is free text and includes non-status values — rental type (`STR`) and people's names (`REPAIR DANIEL`, `BOOYSEN TIM`) mixed in, because there was nowhere else to put that information.
 - Registration sometimes contains two plates in one field (e.g. `"JG52RVGP (JGN814MP)"`), almost certainly an un-modeled plate change.
 - Client is denormalized onto the vehicle (`CURRENT CLIENT`, `PAST CLIENTS` as a comma-separated string) rather than being its own entity with history.
@@ -47,6 +63,8 @@ Known data-quality issues driving the schema design below:
 - STR deal "car" references are inconsistent free text (partial reg, model name, or manufacturer only) rather than a real reference to a fleet vehicle.
 
 ## 4. Data Model
+
+Schema lives in `supabase/migrations/`, applied in filename order. `src/lib/database.types.ts` is hand-maintained to match it (see the note at the top of that file — keep it in sync whenever a migration changes a table shape).
 
 ### `profiles` (extends `auth.users`)
 - `id` (uuid, = `auth.users.id`)
@@ -69,7 +87,7 @@ Known data-quality issues driving the schema design below:
 - `key_version` (supports future key rotation)
 - `created_by` fk → profiles, `created_at`, `updated_at`
 - RLS: `admin`/`manager` only — `technician` denied entirely at the database level.
-- Every decrypt/reveal action is written to `audit_log`. Never included in exports, generated PDFs, or WhatsApp/SMS messages.
+- Every decrypt/reveal action is written to `audit_log`. Never included in exports, generated PDFs, or WhatsApp/SMS messages. (The Excel export feature — see §9 — deliberately only ever reads the already-masked `account_number_last4`, never the encrypted fields.)
 
 ### `vehicles`
 - `id`, `file_no` (unique, legacy reference e.g. `A025`)
@@ -77,13 +95,13 @@ Known data-quality issues driving the schema design below:
 - `vin`, `engine_number`
 - `status` enum(`available`, `on_road`, `parked`, `in_repair`, `for_sale`, `sold`, `written_off`)
 - `legacy_status_note` (text — raw original sheet value, preserved verbatim)
-- `assigned_to` (nullable fk → profiles, when the assignee has a real account) / `assigned_to_name` (free text, used when they don't — e.g. imported historical data, an external contractor)
+- `assigned_to` (nullable fk → profiles, when the assignee has a real account) / `assigned_to_name` (free text, added post-launch for when they don't — e.g. imported historical data, an external contractor without a login)
 - `current_mileage`, `next_service_km`, `next_service_date`, `last_serviced_by`
 - `tracker_supplier`, `tracker_running` enum(`yes`, `no`, `no_info`)
 - `natis_on_file` boolean, `license_disc_expiry` date, `has_spare_key` boolean
 - `warranty_active` boolean, `warranty_notes` text
 - `has_contract_file` boolean
-- `insurance_claim_status` enum(`none`, `pending`, `paid`, `denied`)
+- `insurance_claim_status` enum(`none`, `pending`, `paid`, `denied`) — **schema exists, not yet surfaced in the UI**
 - timestamps
 
 ### `vehicle_registrations` (license plate history)
@@ -96,9 +114,9 @@ Known data-quality issues driving the schema design below:
 - `id`, `vehicle_id` fk → vehicles
 - `cost_type` enum(`service`, `repair`, `car_wash`, `maintenance`, `other`)
 - `cost_date`, `supplier`, `amount`, `mileage_at_time` (nullable)
-- `invoice_file_path` (Supabase Storage object, private bucket)
+- `invoice_file_path` — object path in the private `vehicle-invoices` Storage bucket, stored as `"<vehicle_id>/<filename>"` so Storage RLS can reuse the same `vehicle_assignments`-based visibility rule as `vehicle_costs` itself
 - `notes`, `recorded_by` fk → profiles, `created_at`
-- Doubles as the vehicle's service history log — no separate table needed.
+- Doubles as the vehicle's service history log — no separate table needed. Shown in the Vehicle detail panel as a tabbed table (one tab per `cost_type`, plus "All"), with upload/download of the invoice PDF.
 
 ### `contracts`
 - `id`, `vehicle_id` fk → vehicles, `client_id` fk → clients
@@ -116,65 +134,87 @@ Known data-quality issues driving the schema design below:
 - `billing_day` int (day of month payment is due)
 - `billing_direction` enum(`advance`, `arrears`) — "pays ahead" vs "pays back"
 - `billing_frequency` enum(`weekly`, `monthly`)
+- Built into the Contract panel's form when `contract_type = short_term_rental`.
 
-### `rental_payment_periods` (generalized; populated first for STR deals)
-- `id`, `contract_id` fk → contracts
-- `period_label` (e.g. `"2025-05"`), `due_date`
-- `status` enum(`paid`, `owed`, `ended`, `upcoming`)
-- `amount_due`, `amount_owed`, `paid_date`, `notes`
-
-### `insurance_claims`
-- `id`, `vehicle_id` fk → vehicles
-- `claimant_name`, `amount`, `filed_date`, `paid_date`, `notes`
-
-### `sale_listings`
-- `id`, `vehicle_id` fk → vehicles
-- `spec`, `condition`, `mileage_at_listing`, `location`
-- `dealer_price` (the sheet's "auto price"), `listed_price` ("our price")
-- `listed_at`
+### `rental_payment_periods`, `insurance_claims`, `sale_listings`
+- Schema exists (generalized payment-period tracking, insurance claim records, for-sale listing details), migrated from the source workbook, but **no app UI reads or writes these yet**. They're reachable today only via direct SQL/Supabase dashboard. Candidates for a future module once the client prioritizes them.
 
 ### `status_migration_map` (import-time only, not part of the running app schema)
 - `raw_status`, `normalized_status`, `assigned_to`, `contract_type`
-- One-off table used to map the ~11 distinct free-text status values found in the source data to clean enum values before import. Filled in collaboratively with the client, then discarded after migration.
+- One-off table used to map the ~11 distinct free-text status values found in the source data to clean enum values before import. Used once during the real data import (see §7), no longer actively referenced.
 
 ### `audit_log`
 - `id`, `table_name`, `record_id`, `action`, `changed_by` fk → profiles, `diff` jsonb, `created_at`
 - Covers all writes to financially sensitive tables, plus explicit "viewed banking details" reveal events.
 
+### `vehicle_assignments`
+- `id`, `vehicle_id`, `technician_id` fk → profiles, `assigned_at`, `unassigned_at` (null = currently assigned)
+- Drives technician-scoped RLS (a technician only sees vehicles currently assigned to them) and the `vehicle-invoices` Storage policies.
+
 ## 5. Authentication & Access Control
 
 - **Login identifier**: cell phone number (E.164, normalized from local input), not email — several technicians may not have an email address.
 - **Pattern**: phone + password. One-time SMS OTP during account setup (admin creates the account; the new user verifies their number and sets a password) and for password resets. Day-to-day logins are number + password, no SMS required.
+- **Current real-world caveat**: the client's Twilio SMS sending isn't fully live yet (regulatory/account setup still in progress on their side), so the normal "Add staff" → OTP → `/setup-account` flow doesn't reliably reach new users right now. Until that's resolved, new accounts are created directly via the Supabase Admin API with a password set immediately (bypassing the OTP step) — see the Staff page for the normal flow, which will work end-to-end once Twilio is live.
 - **Future**: OTP channel is built as a config-level setting (`OTP_CHANNEL=sms`), so switching the setup/reset OTP from SMS to WhatsApp (via Twilio's WhatsApp channel) once the client's WhatsApp Business environment is ready requires no code changes.
 - **No public sign-up.** Accounts are created only by an admin, via a server-side action using the Supabase Admin API.
-- **Roles**: `admin` (full access), `manager` (day-to-day operations), `technician` (assigned vehicles + cost/service logging only). No additional roles or branch scoping requested at this time.
+- **Roles**: `admin` (full access), `manager` (day-to-day operations), `technician` (assigned vehicles + cost/service logging only). The client confirmed this 3-role model is sufficient (no per-action granular permissions matrix needed). Role *editing* after account creation isn't built yet — see §11.
 - **Enforcement layers**:
-  - Postgres RLS on every table (e.g. technicians scoped to vehicles via a `vehicle_assignments` table; banking details denied entirely to technicians)
-  - Next.js middleware for route-level gating
+  - Postgres RLS on every table (e.g. technicians scoped to vehicles via `vehicle_assignments`; banking details denied entirely to technicians)
+  - Next.js Proxy (`src/lib/supabase/proxy.ts`) for route-level gating and session refresh
   - Server Actions re-check authorization server-side (never trust client-side role checks alone)
 
 ## 6. Security
 
-- **In transit**: TLS enforced end-to-end (Supabase connections and hosting platform both default to HTTPS/TLS); HSTS enabled; no path where data leaves over plain HTTP.
+- **In transit**: TLS enforced end-to-end (Supabase connections and Vercel hosting both default to HTTPS/TLS); no path where data leaves over plain HTTP.
 - **At rest, infrastructure level**: Supabase's underlying Postgres storage is disk-encrypted by default (covers physical media / backup theft).
-- **At rest, application level**: client banking details (`client_banking_details.account_number_encrypted`, `account_holder_name_encrypted`) are additionally encrypted with AES-256-GCM in server-only TypeScript code before ever reaching Postgres — the database itself only ever stores ciphertext. The encryption key lives as a server-only secret (never bundled client-side, never logged, not stored in the database). `key_version` is included from day one to support future key rotation without a data migration.
+- **At rest, application level**: client banking details (`client_banking_details.account_number_encrypted`, `account_holder_name_encrypted`) are additionally encrypted with AES-256-GCM in server-only TypeScript code (`src/lib/crypto.ts`) before ever reaching Postgres — the database itself only ever stores ciphertext. The encryption key (`BANKING_ENCRYPTION_KEY`) lives as a server-only secret (never bundled client-side, never logged, not stored in the database). `key_version` is included from day one to support future key rotation without a data migration.
 - **Defense in depth**: encryption is paired with RLS (technicians denied at the DB level, not just hidden in the UI), not a substitute for it.
 - **Masking & audit**: banking details are masked by default in the UI (last 4 digits only); a full reveal is an explicit user action and is written to `audit_log`. Banking details are never included in exports, generated PDFs, or outbound WhatsApp/SMS messages.
+- **Dependency posture**: `xlsx` (SheetJS) has a known high-severity prototype-pollution/ReDoS advisory with no upstream fix; it's scoped to the local, dev-only import script (`scripts/import-current-fleet.mjs`), which only ever reads a file the operator supplies themselves — accepted as a low-risk, contained exception rather than something blocking a release.
 - **Future option, not needed for v1**: if automated debit-order collection is ever required (rather than an admin doing manual EFTs), consider a payment processor that tokenizes bank accounts, removing the need to store real account numbers at all.
 
-## 7. Data Migration
+## 7. Data Migration — completed
 
-- Historical fleet, client, and contract data will be migrated from the workbook (`CURRENT FLEET`, `ENDED CONTRACTS`, `CARS FOR SALE`, `WAITING PAYOUT INSURANCE`).
-- STR deal history will also be migrated, reshaped from the pivot layout in `STR DEALS` into `contracts` + `str_deal_details` + `rental_payment_periods` rows.
-- Status normalization: the ~11 distinct raw `STATUS` values are mapped via `status_migration_map` into a clean `status` enum plus a separate `assigned_to` field, with the original raw value preserved in `legacy_status_note`.
-- STR vehicle references (partial reg/model/manufacturer text) are resolved to real `vehicle_id` foreign keys via a best-effort matcher; anything below a confidence threshold is flagged in a manual review list rather than guessed silently.
-- `Sheet2` (REG + CURRENT CLIENT only) is treated as a stale duplicate and not used as a migration source unless the client says otherwise.
+Real production data has been imported (this section is now a historical record, not a plan):
 
-## 8. Open Items
+- `scripts/import-current-fleet.mjs` imported the real CURRENT FLEET sheet: **208 vehicles and 170 contracts** created, with a confidence-based policy that skips anything ambiguous rather than guessing, writing skipped/flagged rows to a markdown review report (`.import-reports/`) for manual follow-up.
+- Status normalization: the ~11 distinct raw `STATUS` values were mapped via `status_migration_map` into the clean `status` enum plus a separate `assigned_to`/`assigned_to_name` field, with the original raw value preserved in `legacy_status_note`.
+- `ENDED CONTRACTS`, `CARS FOR SALE`, `WAITING PAYOUT INSURANCE`, and `STR DEALS` were **not** part of this first import pass (no `rental_payment_periods`/`insurance_claims`/`sale_listings` UI exists yet to make use of them — see §4). Migrating them is straightforward with the same script pattern once those modules are prioritized.
+- `Sheet2` (REG + CURRENT CLIENT only) was treated as a stale duplicate and not used as a migration source.
 
-- Real staff list (name, cell number, role) needed to seed actual user accounts.
-- PDF generation library not yet chosen.
-- WhatsApp Business API / Twilio environment not yet set up on the client's side (planned for a later phase).
-- Confirm meaning of two data-quality items found during analysis, to resolve during migration rather than guess:
-  - Registration values containing two plates in one field (assumed to be a plate change — now modeled via `vehicle_registrations`).
-  - The unlabeled arrears-like column in `CURRENT FLEET` (assumed to map to `contracts.arrears_amount` / `outstanding_balance`).
+## 8. Deployment
+
+- **Hosting**: Vercel, auto-deploying from the `main` branch on every push.
+- **Branching**: feature work happens on `claude/hopeful-volta-ew7rh5`; merges/fast-forwards to `main` trigger production deploys. (The repo had no `main` branch until the first production deploy — it was created from this branch's state at that point.)
+- **Environment variables** (set in both `.env.local` for local dev and Vercel's project settings): `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` (both "Config" type in Vercel — they're meant to reach the browser), `SUPABASE_SERVICE_ROLE_KEY`, `BANKING_ENCRYPTION_KEY` (both "Secret" type — never exposed client-side), `OTP_CHANNEL`.
+- **Database**: a single live Supabase project (no separate staging environment yet) — see §11 if that becomes a problem.
+
+## 9. What's Built
+
+- **Dashboard** (`/`) — compact, clickable stat-card row (Fleet / Active / Idle / Workshop / Servicing / Contracts), each linking to a pre-filtered Vehicles/Contracts view; a dummy interactive fleet-map placeholder (no real location tracking yet) below it.
+- **Vehicles** (`/vehicles`) — full CRUD via a right-side detail panel; license-plate history; per-vehicle cost/service log (tabbed by cost type, with invoice PDF upload/download); service-due and contract-ending countdown columns; quick filters ("Due for service", "Contract ending"); **configurable columns** — drag-to-reorder, show/hide via a Columns menu, reset to default, all persisted per-browser; row-click or pencil-icon to edit; **Export to Excel** (see below).
+- **Clients** (`/clients`) — full CRUD; encrypted banking details with masked display and an explicit reveal action; Excel export.
+- **Contracts** (`/contracts`) — full CRUD, including the STR-specific billing fields when applicable; Excel export.
+- **Staff / admin** (`/admin/users`, `admin`-only) — create staff accounts (phone + role), activate/deactivate. Role editing after creation is not yet built (see §11).
+- **Excel export** — every list view (Vehicles, Clients, Contracts) has an "Export" button producing a styled `.xlsx` of exactly what's currently on screen (respecting active search/filters/sort, and for Vehicles, the current column order/visibility): a title + "Filter applied" / "Exported" timestamp / "Exported by" meta block, a brand-themed frozen header row with autofilter, zebra-striped rows, color-coded status chips matching the on-screen badges, and Rand-formatted currency columns.
+- **App shell** — collapsible branded sidebar (role-filtered nav), independent table scrolling (sidebar/header/toolbar stay fixed while only table rows scroll), responsive down to the layout level (full mobile nav is still open — see §11).
+- **Auth** — phone + password login, admin-created accounts only, first-time setup via SMS OTP (see the Twilio caveat in §5).
+
+## 10. Import Script
+
+- `scripts/import-current-fleet.mjs` — reads `data/SAR2O_FLEET.xlsx` (gitignored), applies the confidence-based status-parsing policy described in §7, writes vehicles/vehicle_registrations/clients/contracts, supports `--dry-run`, writes a markdown review report to `.import-reports/`.
+
+## 11. Open Items
+
+Roughly in priority order, per the client's stated priorities:
+
+1. **Twilio SMS** — client's regulatory/account setup still in progress; blocks the normal staff-onboarding OTP flow (see §5 workaround).
+2. **Archive view** — client wants vehicles whose contracts have ended moved out of the main Vehicles view into a separate Archive view. Design question pending the client's answer: trigger it off vehicle `status` (sold/written-off) vs. "no active contract" vs. an explicit manual archive action — each has different schema/UX implications.
+3. **Role editing** — admin should be able to change a staff member's role after creation from inside the app, not just at creation (currently requires a direct Supabase dashboard edit). Scoped to the existing 3-role model per the client's confirmation — no granular per-action permissions needed.
+4. **Email notifications & reporting** — not started. Plan: Resend for sending, Vercel Cron for scheduling. Needs the client's input on which notifications matter (weekly digest, new-staff welcome, arrears alerts, etc.) before building.
+5. **Full mobile navigation** — the layout is responsive, but there's currently no way to navigate between pages on a phone (the sidebar is desktop-only with no mobile replacement yet).
+6. **`insurance_claims` / `sale_listings` / `rental_payment_periods`** — schema and historical source data exist; no UI module built yet.
+7. **PDF generation** — not yet started, no library chosen.
+8. **Staging environment** — currently one production Supabase project; consider a separate project for testing schema changes before they hit real data, if that becomes painful.
+9. **WhatsApp Business API** — client's WhatsApp Business environment not yet configured; planned as a later-phase automation channel, same integration boundary as the SMS OTP provider.
