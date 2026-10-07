@@ -18,13 +18,13 @@ function StatCard({
   return (
     <Link
       href={href}
-      className="bg-muted hover:bg-muted/70 flex flex-col gap-2 rounded-lg p-5 transition-colors"
+      title={subtitle}
+      className="bg-muted hover:bg-muted/70 flex items-center gap-2 rounded-md px-3 py-1.5 transition-colors"
     >
       <span className="text-destructive text-xs font-semibold tracking-wide uppercase">
         {label}
       </span>
-      <span className="text-3xl font-bold tabular-nums">{value}</span>
-      <span className="text-muted-foreground text-sm">{subtitle}</span>
+      <span className="text-sm font-bold tabular-nums">{value}</span>
     </Link>
   );
 }
@@ -64,7 +64,7 @@ export async function FleetStatsCards() {
   const total = vehicles?.length ?? 0;
 
   return (
-    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+    <div className="flex flex-wrap gap-2">
       <StatCard label="Fleet" value={total} subtitle="Total vehicles" href="/vehicles" />
       <StatCard
         label="Active"

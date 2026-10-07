@@ -1,9 +1,26 @@
 "use client";
 
 import { useCallback, useState } from "react";
+import {
+  DndContext,
+  KeyboardSensor,
+  PointerSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  horizontalListSortingStrategy,
+  sortableKeyboardCoordinates,
+} from "@dnd-kit/sortable";
+import { Pencil } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { ColumnVisibilityMenu } from "@/components/ui/column-visibility-menu";
+import { DraggableTableHead } from "@/components/ui/draggable-table-head";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -12,9 +29,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { SortableHead } from "@/components/ui/sortable-head";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { daysUntil, formatDayCount, isoDaysFromNow } from "@/lib/date-ranges";
+import { useColumnOrder } from "@/lib/use-column-order";
 import { compareNumbers, compareStrings, useTableControls } from "@/lib/use-table-controls";
 import type { VehicleStatus } from "@/lib/database.types";
 
@@ -69,7 +86,80 @@ function ContractCountdown({ date }: { date: string | null }) {
   );
 }
 
-type SortKey = "reg" | "model" | "status" | "client" | "nextService" | "monthsLeft";
+type ColumnId =
+  | "reg"
+  | "fileNo"
+  | "make"
+  | "model"
+  | "year"
+  | "colour"
+  | "vin"
+  | "engineNumber"
+  | "status"
+  | "client"
+  | "nextService"
+  | "monthsLeft";
+
+const DEFAULT_COLUMN_ORDER: ColumnId[] = [
+  "reg",
+  "fileNo",
+  "make",
+  "model",
+  "year",
+  "colour",
+  "vin",
+  "engineNumber",
+  "status",
+  "client",
+  "nextService",
+  "monthsLeft",
+];
+
+const COLUMN_LABELS: Record<ColumnId, string> = {
+  reg: "Reg",
+  fileNo: "File no",
+  make: "Make",
+  model: "Model",
+  year: "Year",
+  colour: "Colour",
+  vin: "VIN",
+  engineNumber: "Engine no",
+  status: "Status",
+  client: "Client",
+  nextService: "Next service in:",
+  monthsLeft: "Months left",
+};
+
+const MANAGER_ONLY_COLUMNS = new Set<ColumnId>(["client", "monthsLeft"]);
+
+function renderCell(column: ColumnId, vehicle: VehicleWithRegistration) {
+  switch (column) {
+    case "reg":
+      return vehicle.current_plate ?? "—";
+    case "fileNo":
+      return vehicle.file_no;
+    case "make":
+      return vehicle.make ?? "—";
+    case "model":
+      return vehicle.model ?? "—";
+    case "year":
+      return vehicle.year ?? "—";
+    case "colour":
+      return vehicle.colour ?? "—";
+    case "vin":
+      return vehicle.vin ?? "—";
+    case "engineNumber":
+      return vehicle.engine_number ?? "—";
+    case "status":
+      return <Badge variant={STATUS_VARIANT[vehicle.status]}>{STATUS_LABELS[vehicle.status]}</Badge>;
+    case "client":
+      return vehicle.current_client_name ?? "—";
+    case "nextService":
+      return <ServiceCountdown date={vehicle.next_service_date} />;
+    case "monthsLeft":
+      return <ContractCountdown date={vehicle.current_contract_end_date} />;
+  }
+}
 
 export function VehiclesTable({
   rows,
@@ -89,34 +179,60 @@ export function VehiclesTable({
   const [contractEndingSoon, setContractEndingSoon] = useState(initialContractEndingSoon ?? false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
+  const { order, isHidden, reorder, toggleHidden, reset } = useColumnOrder(
+    "sar2o:vehicles-columns",
+    DEFAULT_COLUMN_ORDER
+  );
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
+
+  function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    if (over && active.id !== over.id) {
+      reorder(active.id as ColumnId, over.id as ColumnId);
+    }
+  }
+
+  const visibleColumns = order.filter(
+    (id) => !isHidden(id) && (!MANAGER_ONLY_COLUMNS.has(id) || canManage)
+  );
+  const toggleableColumns = DEFAULT_COLUMN_ORDER.filter(
+    (id) => !MANAGER_ONLY_COLUMNS.has(id) || canManage
+  ).map((id) => ({ id, label: COLUMN_LABELS[id] }));
+
   const searchFn = useCallback(
     (row: VehicleWithRegistration, query: string) =>
-      [row.current_plate, row.file_no, row.make, row.model, row.current_client_name]
+      [row.current_plate, row.file_no, row.make, row.model, row.vin, row.current_client_name]
         .filter(Boolean)
         .some((value) => value!.toLowerCase().includes(query)),
     []
   );
 
-  const sortFns = {
-    reg: (a: VehicleWithRegistration, b: VehicleWithRegistration) =>
-      compareStrings(a.current_plate, b.current_plate),
-    model: (a: VehicleWithRegistration, b: VehicleWithRegistration) =>
-      compareStrings(a.model, b.model),
-    status: (a: VehicleWithRegistration, b: VehicleWithRegistration) =>
-      compareStrings(a.status, b.status),
-    client: (a: VehicleWithRegistration, b: VehicleWithRegistration) =>
-      compareStrings(a.current_client_name, b.current_client_name),
-    nextService: (a: VehicleWithRegistration, b: VehicleWithRegistration) =>
+  const sortFns: Record<ColumnId, (a: VehicleWithRegistration, b: VehicleWithRegistration) => number> = {
+    reg: (a, b) => compareStrings(a.current_plate, b.current_plate),
+    fileNo: (a, b) => compareStrings(a.file_no, b.file_no),
+    make: (a, b) => compareStrings(a.make, b.make),
+    model: (a, b) => compareStrings(a.model, b.model),
+    year: (a, b) => compareNumbers(a.year, b.year),
+    colour: (a, b) => compareStrings(a.colour, b.colour),
+    vin: (a, b) => compareStrings(a.vin, b.vin),
+    engineNumber: (a, b) => compareStrings(a.engine_number, b.engine_number),
+    status: (a, b) => compareStrings(a.status, b.status),
+    client: (a, b) => compareStrings(a.current_client_name, b.current_client_name),
+    nextService: (a, b) =>
       compareNumbers(
         a.next_service_date ? Date.parse(a.next_service_date) : null,
         b.next_service_date ? Date.parse(b.next_service_date) : null
       ),
-    monthsLeft: (a: VehicleWithRegistration, b: VehicleWithRegistration) =>
+    monthsLeft: (a, b) =>
       compareNumbers(
         a.current_contract_end_date ? Date.parse(a.current_contract_end_date) : null,
         b.current_contract_end_date ? Date.parse(b.current_contract_end_date) : null
       ),
-  } satisfies Record<SortKey, (a: VehicleWithRegistration, b: VehicleWithRegistration) => number>;
+  };
 
   const serviceDueCutoff = isoDaysFromNow(30);
   const contractEndingCutoff = isoDaysFromNow(30);
@@ -131,7 +247,7 @@ export function VehiclesTable({
 
   const { search, setSearch, sortKey, sortDir, onSort, filteredRows } = useTableControls<
     VehicleWithRegistration,
-    SortKey
+    ColumnId
   >({
     rows: preFiltered,
     searchFn,
@@ -179,6 +295,12 @@ export function VehiclesTable({
             Contract ending
           </Button>
         )}
+        <ColumnVisibilityMenu
+          columns={toggleableColumns}
+          isHidden={isHidden}
+          onToggle={toggleHidden}
+          onReset={reset}
+        />
         <p className="text-muted-foreground text-sm">
           {filteredRows.length === rows.length
             ? `${rows.length} in the fleet`
@@ -187,87 +309,80 @@ export function VehiclesTable({
       </div>
 
       <div className="min-h-0 flex-1 overflow-auto rounded-lg border bg-background">
-        <Table containerClassName="overflow-x-visible">
-          <TableHeader className="bg-background sticky top-0 z-10">
-            <TableRow>
-              <SortableHead label="Reg" sortKey="reg" activeKey={sortKey} direction={sortDir} onSort={onSort} />
-              <SortableHead label="Model" sortKey="model" activeKey={sortKey} direction={sortDir} onSort={onSort} />
-              <SortableHead label="Status" sortKey="status" activeKey={sortKey} direction={sortDir} onSort={onSort} />
-              {canManage && (
-                <SortableHead label="Client" sortKey="client" activeKey={sortKey} direction={sortDir} onSort={onSort} />
-              )}
-              <SortableHead
-                label="Next service in:"
-                sortKey="nextService"
-                activeKey={sortKey}
-                direction={sortDir}
-                onSort={onSort}
-              />
-              {canManage && (
-                <SortableHead
-                  label="Months left"
-                  sortKey="monthsLeft"
-                  activeKey={sortKey}
-                  direction={sortDir}
-                  onSort={onSort}
-                />
-              )}
-              {canManage && <TableHead className="w-24" />}
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {filteredRows.map((vehicle) => (
-              <TableRow
-                key={vehicle.id}
-                className={canManage ? "cursor-pointer" : undefined}
-                onClick={() => canManage && setSelectedId(vehicle.id)}
-              >
-                <TableCell className="font-medium">{vehicle.current_plate ?? "—"}</TableCell>
-                <TableCell>
-                  {[vehicle.year, vehicle.make, vehicle.model].filter(Boolean).join(" ") || "—"}
-                </TableCell>
-                <TableCell>
-                  <Badge variant={STATUS_VARIANT[vehicle.status]}>{STATUS_LABELS[vehicle.status]}</Badge>
-                </TableCell>
-                {canManage && <TableCell>{vehicle.current_client_name ?? "—"}</TableCell>}
-                <TableCell>
-                  <ServiceCountdown date={vehicle.next_service_date} />
-                </TableCell>
-                {canManage && (
-                  <TableCell>
-                    <ContractCountdown date={vehicle.current_contract_end_date} />
-                  </TableCell>
-                )}
-                {canManage && (
-                  <TableCell
-                    className="flex items-center justify-end gap-1"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <VehiclePanel
-                      vehicle={vehicle}
-                      canManage={canManage}
-                      open={selectedId === vehicle.id}
-                      onOpenChange={(next) => setSelectedId(next ? vehicle.id : null)}
-                    />
-                    <DeleteVehicleButton
-                      vehicleId={vehicle.id}
-                      label={vehicle.current_plate ?? vehicle.file_no}
-                    />
-                  </TableCell>
-                )}
-              </TableRow>
-            ))}
-            {filteredRows.length === 0 && (
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+          <Table containerClassName="overflow-x-visible">
+            <TableHeader className="bg-background sticky top-0 z-10">
               <TableRow>
-                <TableCell colSpan={canManage ? 7 : 4} className="text-muted-foreground text-center py-8">
-                  No vehicles match your filters.
-                </TableCell>
+                <SortableContext items={visibleColumns} strategy={horizontalListSortingStrategy}>
+                  {visibleColumns.map((column) => (
+                    <DraggableTableHead
+                      key={column}
+                      id={column}
+                      label={COLUMN_LABELS[column]}
+                      sortKey={column}
+                      activeKey={sortKey}
+                      direction={sortDir}
+                      onSort={onSort}
+                    />
+                  ))}
+                </SortableContext>
+                {canManage && <TableHead className="w-24" />}
               </TableRow>
-            )}
-          </TableBody>
-        </Table>
+            </TableHeader>
+            <TableBody>
+              {filteredRows.map((vehicle) => (
+                <TableRow
+                  key={vehicle.id}
+                  className={canManage ? "cursor-pointer" : undefined}
+                  onClick={() => canManage && setSelectedId(vehicle.id)}
+                >
+                  {visibleColumns.map((column) => (
+                    <TableCell key={column} className={column === "reg" ? "font-medium" : undefined}>
+                      {renderCell(column, vehicle)}
+                    </TableCell>
+                  ))}
+                  {canManage && (
+                    <TableCell
+                      className="flex items-center justify-end gap-1"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        aria-label="Edit vehicle"
+                        onClick={() => setSelectedId(vehicle.id)}
+                      >
+                        <Pencil className="size-4" />
+                      </Button>
+                      <VehiclePanel
+                        vehicle={vehicle}
+                        canManage={canManage}
+                        open={selectedId === vehicle.id}
+                        onOpenChange={(next) => setSelectedId(next ? vehicle.id : null)}
+                      />
+                      <DeleteVehicleButton
+                        vehicleId={vehicle.id}
+                        label={vehicle.current_plate ?? vehicle.file_no}
+                      />
+                    </TableCell>
+                  )}
+                </TableRow>
+              ))}
+              {filteredRows.length === 0 && (
+                <TableRow>
+                  <TableCell
+                    colSpan={visibleColumns.length + (canManage ? 1 : 0)}
+                    className="text-muted-foreground text-center py-8"
+                  >
+                    No vehicles match your filters.
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </DndContext>
       </div>
     </div>
   );
 }
-

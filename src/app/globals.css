@@ -3,12 +3,6 @@
 
 @custom-variant dark (&:is(.dark *));
 
-html {
-  /* Bumps the rem base so every Tailwind text-* utility scales up
-     app-wide, rather than editing font sizes one component at a time. */
-  font-size: 112.5%;
-}
-
 :root {
   /* Brand palette — the fixed set of colors to draw from across the
      UI, distinct from the semantic tokens below (which may reassign
