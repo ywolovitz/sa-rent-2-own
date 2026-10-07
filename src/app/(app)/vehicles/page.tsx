@@ -85,6 +85,7 @@ export default async function VehiclesPage({ searchParams }: PageProps<"/vehicle
         initialStatus={initialStatus}
         initialServiceDueSoon={initialServiceDueSoon}
         initialContractEndingSoon={initialContractEndingSoon}
+        exportedBy={profile?.fullName ?? "Unknown"}
       />
     </div>
   );

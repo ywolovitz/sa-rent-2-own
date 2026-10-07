@@ -84,6 +84,7 @@ export default async function ContractsPage({ searchParams }: PageProps<"/contra
         vehicles={selectableVehicles}
         clients={selectableClients}
         initialEndingSoon={initialEndingSoon}
+        exportedBy={profile.fullName}
       />
     </div>
   );

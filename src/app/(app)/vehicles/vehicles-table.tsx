@@ -31,7 +31,7 @@ import {
 } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { daysUntil, formatDayCount, isoDaysFromNow } from "@/lib/date-ranges";
-import { exportRowsToExcel } from "@/lib/export-to-excel";
+import { exportToExcel, summarizeFilters, type ExportColumn } from "@/lib/export-to-excel";
 import { useColumnOrder } from "@/lib/use-column-order";
 import { compareNumbers, compareStrings, useTableControls } from "@/lib/use-table-controls";
 import type { VehicleStatus } from "@/lib/database.types";
@@ -62,6 +62,16 @@ const STATUS_LABELS: Record<VehicleStatus, string> = {
   for_sale: "For sale",
   sold: "Sold",
   written_off: "Written off",
+};
+
+const STATUS_CHIP_COLORS: Record<VehicleStatus, { fill: string; font?: string }> = {
+  available: { fill: "FFE5E5E5", font: "FF1F1F1F" },
+  on_road: { fill: "FF2F9E58" },
+  parked: { fill: "FFFFFFFF", font: "FF1F1F1F" },
+  in_repair: { fill: "FFF0A830" },
+  for_sale: { fill: "FF1F1F1F" },
+  sold: { fill: "FFE5E5E5", font: "FF1F1F1F" },
+  written_off: { fill: "FFFF5252" },
 };
 
 function formatServiceCountdown(date: string | null): string {
@@ -207,12 +217,14 @@ export function VehiclesTable({
   initialStatus,
   initialServiceDueSoon,
   initialContractEndingSoon,
+  exportedBy,
 }: {
   rows: VehicleWithRegistration[];
   canManage: boolean;
   initialStatus?: VehicleStatus;
   initialServiceDueSoon?: boolean;
   initialContractEndingSoon?: boolean;
+  exportedBy: string;
 }) {
   const [statusFilter, setStatusFilter] = useState<"all" | VehicleStatus>(initialStatus ?? "all");
   const [serviceDueSoon, setServiceDueSoon] = useState(initialServiceDueSoon ?? false);
@@ -295,6 +307,30 @@ export function VehiclesTable({
     defaultSortKey: "nextService",
   });
 
+  function handleExport() {
+    const columns: ExportColumn<VehicleWithRegistration>[] = visibleColumns.map((column) => ({
+      header: COLUMN_LABELS[column],
+      value: (vehicle) => exportValue(column, vehicle),
+      align: column === "year" ? "right" : undefined,
+      chip: column === "status" ? (vehicle) => STATUS_CHIP_COLORS[vehicle.status] : undefined,
+    }));
+
+    exportToExcel({
+      baseFilename: "vehicles",
+      sheetName: "Vehicles",
+      title: "SAR2O Fleet — Vehicles Export",
+      filterSummary: summarizeFilters([
+        search && `Search: "${search}"`,
+        statusFilter !== "all" && `Status: ${STATUS_LABELS[statusFilter]}`,
+        serviceDueSoon && "Due for service",
+        contractEndingSoon && "Contract ending",
+      ]),
+      exportedBy,
+      columns,
+      rows: filteredRows,
+    });
+  }
+
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4">
       <div className="flex flex-wrap items-center gap-3">
@@ -341,22 +377,7 @@ export function VehiclesTable({
           onToggle={toggleHidden}
           onReset={reset}
         />
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={() =>
-            exportRowsToExcel(
-              "vehicles",
-              "Vehicles",
-              filteredRows.map((vehicle) =>
-                Object.fromEntries(
-                  visibleColumns.map((column) => [COLUMN_LABELS[column], exportValue(column, vehicle)])
-                )
-              )
-            )
-          }
-        >
+        <Button type="button" variant="outline" size="sm" onClick={handleExport}>
           <Download />
           Export
         </Button>

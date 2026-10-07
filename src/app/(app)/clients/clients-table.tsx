@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/select";
 import { SortableHead } from "@/components/ui/sortable-head";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { exportRowsToExcel } from "@/lib/export-to-excel";
+import { exportToExcel, summarizeFilters, type ExportColumn } from "@/lib/export-to-excel";
 import { formatSaPhoneForDisplay } from "@/lib/phone";
 import { compareStrings, useTableControls } from "@/lib/use-table-controls";
 
@@ -32,7 +32,18 @@ function bankingLabel(client: ClientWithBanking): string {
     : "None on file";
 }
 
-export function ClientsTable({ rows }: { rows: ClientWithBanking[] }) {
+const BANKING_CHIP_COLORS = {
+  has: { fill: "FF2F9E58" },
+  none: { fill: "FFE5E5E5", font: "FF1F1F1F" },
+};
+
+export function ClientsTable({
+  rows,
+  exportedBy,
+}: {
+  rows: ClientWithBanking[];
+  exportedBy: string;
+}) {
   const [bankingFilter, setBankingFilter] = useState<BankingFilter>("all");
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
@@ -65,6 +76,33 @@ export function ClientsTable({ rows }: { rows: ClientWithBanking[] }) {
     defaultSortKey: "name",
   });
 
+  function handleExport() {
+    const columns: ExportColumn<ClientWithBanking>[] = [
+      { header: "Name", value: (c) => c.full_name },
+      { header: "Cell number", value: (c) => formatSaPhoneForDisplay(c.cell_number) },
+      { header: "ID number", value: (c) => c.id_number ?? "" },
+      {
+        header: "Banking",
+        value: (c) => bankingLabel(c),
+        chip: (c) => (c.banking ? BANKING_CHIP_COLORS.has : BANKING_CHIP_COLORS.none),
+      },
+    ];
+
+    exportToExcel({
+      baseFilename: "clients",
+      sheetName: "Clients",
+      title: "SAR2O Fleet — Clients Export",
+      filterSummary: summarizeFilters([
+        search && `Search: "${search}"`,
+        bankingFilter === "has" && "Has banking on file",
+        bankingFilter === "none" && "No banking on file",
+      ]),
+      exportedBy,
+      columns,
+      rows: filteredRows,
+    });
+  }
+
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4">
       <div className="flex flex-wrap items-center gap-3">
@@ -84,23 +122,7 @@ export function ClientsTable({ rows }: { rows: ClientWithBanking[] }) {
             <SelectItem value="none">No banking on file</SelectItem>
           </SelectContent>
         </Select>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={() =>
-            exportRowsToExcel(
-              "clients",
-              "Clients",
-              filteredRows.map((client) => ({
-                Name: client.full_name,
-                "Cell number": formatSaPhoneForDisplay(client.cell_number),
-                "ID number": client.id_number ?? "",
-                Banking: bankingLabel(client),
-              }))
-            )
-          }
-        >
+        <Button type="button" variant="outline" size="sm" onClick={handleExport}>
           <Download />
           Export
         </Button>

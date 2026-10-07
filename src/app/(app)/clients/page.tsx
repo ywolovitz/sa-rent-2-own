@@ -61,7 +61,7 @@ export default async function ClientsPage() {
         <ClientPanel />
       </div>
 
-      <ClientsTable rows={rows} />
+      <ClientsTable rows={rows} exportedBy={profile.fullName} />
     </div>
   );
 }

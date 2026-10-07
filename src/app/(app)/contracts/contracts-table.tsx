@@ -16,7 +16,7 @@ import {
 import { SortableHead } from "@/components/ui/sortable-head";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { isoDaysFromNow } from "@/lib/date-ranges";
-import { exportRowsToExcel } from "@/lib/export-to-excel";
+import { exportToExcel, summarizeFilters, type ExportColumn } from "@/lib/export-to-excel";
 import { compareNumbers, compareStrings, useTableControls } from "@/lib/use-table-controls";
 import type { ContractStatus, ContractType } from "@/lib/database.types";
 
@@ -50,6 +50,16 @@ const TYPE_LABELS: Record<ContractType, string> = {
   other: "Other",
 };
 
+const STATUS_CHIP_COLORS: Record<ContractStatus, { fill: string; font?: string }> = {
+  active: { fill: "FF2F9E58" },
+  completed: { fill: "FFE5E5E5", font: "FF1F1F1F" },
+  cancelled: { fill: "FFFFFFFF", font: "FF1F1F1F" },
+  defaulted: { fill: "FFFF5252" },
+  repossessed: { fill: "FFFF5252" },
+};
+
+const ARREARS_CHIP = { fill: "FFFF5252" };
+
 type SortKey = "vehicle" | "client" | "type" | "status" | "installment" | "arrears" | "endDate";
 
 export function ContractsTable({
@@ -57,11 +67,13 @@ export function ContractsTable({
   vehicles,
   clients,
   initialEndingSoon,
+  exportedBy,
 }: {
   rows: ContractRow[];
   vehicles: SelectableVehicle[];
   clients: SelectableClient[];
   initialEndingSoon?: boolean;
+  exportedBy: string;
 }) {
   const [statusFilter, setStatusFilter] = useState<"all" | ContractStatus>("all");
   const [typeFilter, setTypeFilter] = useState<"all" | ContractType>("all");
@@ -101,6 +113,48 @@ export function ContractsTable({
     sortFns,
     defaultSortKey: "endDate",
   });
+
+  function handleExport() {
+    const columns: ExportColumn<ContractRow>[] = [
+      { header: "Vehicle", value: (r) => r.vehicleLabel },
+      { header: "Client", value: (r) => r.clientName },
+      { header: "Type", value: (r) => TYPE_LABELS[r.contract_type] },
+      {
+        header: "Status",
+        value: (r) => STATUS_LABELS[r.status],
+        chip: (r) => STATUS_CHIP_COLORS[r.status],
+      },
+      {
+        header: "Installment",
+        value: (r) => r.installment_amount ?? "",
+        numberFormat: '"R"#,##0.00',
+        align: "right",
+      },
+      {
+        header: "Arrears",
+        value: (r) => r.arrears_amount,
+        numberFormat: '"R"#,##0.00',
+        align: "right",
+        chip: (r) => (r.arrears_amount > 0 ? ARREARS_CHIP : null),
+      },
+      { header: "End date", value: (r) => r.end_date ?? "" },
+    ];
+
+    exportToExcel({
+      baseFilename: "contracts",
+      sheetName: "Contracts",
+      title: "SAR2O Fleet — Contracts Export",
+      filterSummary: summarizeFilters([
+        search && `Search: "${search}"`,
+        statusFilter !== "all" && `Status: ${STATUS_LABELS[statusFilter]}`,
+        typeFilter !== "all" && `Type: ${TYPE_LABELS[typeFilter]}`,
+        endingSoon && "Ending within 3 months",
+      ]),
+      exportedBy,
+      columns,
+      rows: filteredRows,
+    });
+  }
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4">
@@ -143,26 +197,7 @@ export function ContractsTable({
             <X />
           </Button>
         )}
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={() =>
-            exportRowsToExcel(
-              "contracts",
-              "Contracts",
-              filteredRows.map((row) => ({
-                Vehicle: row.vehicleLabel,
-                Client: row.clientName,
-                Type: TYPE_LABELS[row.contract_type],
-                Status: STATUS_LABELS[row.status],
-                Installment: row.installment_amount ?? "",
-                Arrears: row.arrears_amount,
-                "End date": row.end_date ?? "",
-              }))
-            )
-          }
-        >
+        <Button type="button" variant="outline" size="sm" onClick={handleExport}>
           <Download />
           Export
         </Button>
