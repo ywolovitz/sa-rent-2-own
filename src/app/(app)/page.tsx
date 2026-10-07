@@ -3,6 +3,7 @@ import { FleetStatsCards } from "@/components/dashboard/fleet-stats-cards";
 import { FleetMapPlaceholder } from "@/components/dashboard/fleet-map-placeholder";
 import { FleetValueChart } from "@/components/dashboard/fleet-value-chart";
 import { FleetStatusPieChart } from "@/components/dashboard/fleet-status-pie-chart";
+import { FleetDeadlinesChart } from "@/components/dashboard/fleet-deadlines-chart";
 
 export default async function DashboardPage() {
   const profile = await getCurrentProfile();
@@ -26,6 +27,7 @@ export default async function DashboardPage() {
           <FleetStatusPieChart />
         </div>
       </div>
+      {canManage && <FleetDeadlinesChart />}
     </div>
   );
 }

@@ -24,7 +24,7 @@ export function FleetMapPlaceholder() {
   const [activePin, setActivePin] = useState<string | null>(null);
 
   return (
-    <div className="rounded-lg border bg-background p-4">
+    <div className="flex h-80 flex-col rounded-lg border bg-background p-4 lg:h-full">
       <div className="mb-3 flex items-center justify-between">
         <div>
           <h3 className="font-semibold tracking-tight">Fleet map</h3>
@@ -33,7 +33,7 @@ export function FleetMapPlaceholder() {
         <Badge variant="secondary">Preview</Badge>
       </div>
 
-      <div className="bg-muted relative h-80 overflow-hidden rounded-md">
+      <div className="bg-muted relative min-h-0 flex-1 overflow-hidden rounded-md">
         <div
           className="absolute inset-0 transition-transform duration-200"
           style={{

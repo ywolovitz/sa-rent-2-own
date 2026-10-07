@@ -29,7 +29,7 @@ export function FleetValueChartClient({ data }: { data: FleetValueDatum[] }) {
             fontSize: 12,
           }}
         />
-        <Bar dataKey="value" radius={4} maxBarSize={28}>
+        <Bar dataKey="value" radius={[0, 4, 4, 0]} maxBarSize={20}>
           {data.map((entry) => (
             <Cell key={entry.name} fill={entry.color} />
           ))}
