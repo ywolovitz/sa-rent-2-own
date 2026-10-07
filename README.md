@@ -39,6 +39,8 @@ These same values (minus anything only needed locally) are set in Vercel's proje
 
 ### 3. Install and run
 
+Requires Node.js 22+ (see `.nvmrc`/`package.json#engines` — `@supabase/supabase-js` drops support for older versions).
+
 ```bash
 npm install
 npm run dev
