@@ -661,7 +661,6 @@ export function VehiclesTable({
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h1 className="text-2xl font-semibold tracking-tight">Vehicles</h1>
         <div className="flex flex-wrap items-center gap-2">
-          {canManage && <VehiclePanel />}
           <StatButtonPill
             label="Fleet"
             value={fleetCount}
@@ -703,6 +702,7 @@ export function VehiclesTable({
             subtitle="Ending within 3 months"
             href="/contracts?ending=soon"
           />
+          {canManage && <VehiclePanel />}
         </div>
       </div>
 

@@ -173,7 +173,6 @@ export function ContractsTable({
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h1 className="text-2xl font-semibold tracking-tight">Contracts</h1>
         <div className="flex flex-wrap items-center gap-2">
-          <ContractPanel vehicles={vehicles} clients={clients} />
           <StatLinkPill
             label="Fleet"
             value={vehicleStatFilters.fleetCount}
@@ -211,6 +210,7 @@ export function ContractsTable({
             isActive={endingSoon}
             onClick={() => setEndingSoon((v) => !v)}
           />
+          <ContractPanel vehicles={vehicles} clients={clients} />
         </div>
       </div>
 
