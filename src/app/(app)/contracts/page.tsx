@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 
 import { createClient as createSupabaseServerClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/auth/current-profile";
-import { FleetStatsCards } from "@/components/dashboard/fleet-stats-cards";
+import { FleetStatsCards, type FleetStatFilter } from "@/components/dashboard/fleet-stats-cards";
 
 import { ContractPanel } from "./contract-panel";
 import { ContractsTable } from "./contracts-table";
@@ -15,6 +15,7 @@ function firstParam(value: string | string[] | undefined) {
 export default async function ContractsPage({ searchParams }: PageProps<"/contracts">) {
   const params = await searchParams;
   const initialEndingSoon = firstParam(params.ending) === "soon";
+  const activeStatFilter: FleetStatFilter | undefined = initialEndingSoon ? "ending_soon" : undefined;
 
   const profile = await getCurrentProfile();
   if (!profile || (profile.role !== "admin" && profile.role !== "manager")) {
@@ -77,7 +78,7 @@ export default async function ContractsPage({ searchParams }: PageProps<"/contra
         <ContractPanel vehicles={selectableVehicles} clients={selectableClients} />
       </div>
 
-      <FleetStatsCards />
+      <FleetStatsCards active={activeStatFilter} />
 
       <ContractsTable
         rows={rows}

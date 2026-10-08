@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/auth/current-profile";
-import { FleetStatsCards } from "@/components/dashboard/fleet-stats-cards";
+import { FleetStatsCards, type FleetStatFilter } from "@/components/dashboard/fleet-stats-cards";
 import type { PaymentMethod } from "@/lib/database.types";
 import { vehicleStatusValues } from "./schema";
 
@@ -19,17 +19,16 @@ export default async function VehiclesPage({ searchParams }: PageProps<"/vehicle
   const initialServiceDueSoon = firstParam(params.service) === "due_soon";
   const initialContractEndingSoon = firstParam(params.contract) === "ending_soon";
 
+  const activeStatFilter: FleetStatFilter | undefined = initialServiceDueSoon
+    ? "due_soon"
+    : initialStatus === "on_road" || initialStatus === "parked" || initialStatus === "in_repair"
+      ? initialStatus
+      : initialStatus
+        ? undefined
+        : "fleet";
+
   const [profile, supabase] = await Promise.all([getCurrentProfile(), createClient()]);
   const canManage = profile?.role === "admin" || profile?.role === "manager";
-
-  const { data: vehicles } = await supabase
-    .from("vehicles")
-    .select(
-      "id, file_no, make, model, year, colour, vin, engine_number, status, legacy_status_note, current_mileage, next_service_km, next_service_date, last_serviced_by, tracker_supplier, tracker_running, natis_on_file, license_disc_expiry, has_spare_key, warranty_active, warranty_notes, has_contract_file"
-    )
-    .order("file_no");
-
-  const vehicleIds = (vehicles ?? []).map((v) => v.id);
 
   interface ActiveContractRow {
     vehicle_id: string;
@@ -49,42 +48,33 @@ export default async function VehiclesPage({ searchParams }: PageProps<"/vehicle
     client_id: string;
   }
 
-  const [{ data: registrations }, { data: activeContracts }, { data: pastContracts }] =
+  // None of these filter by the others' results (registrations/contracts/
+  // clients are small tables fetched in full, not scoped by vehicle id), so
+  // they all run in one wave instead of waiting on the vehicles query first.
+  const [{ data: vehicles }, { data: registrations }, { data: activeContracts }, { data: pastContracts }, { data: clients }] =
     await Promise.all([
-      vehicleIds.length
-        ? supabase
-            .from("vehicle_registrations")
-            .select("vehicle_id, plate_number")
-            .in("vehicle_id", vehicleIds)
-            .is("effective_to", null)
-        : Promise.resolve({ data: [] as { vehicle_id: string; plate_number: string }[] }),
-      canManage && vehicleIds.length
+      supabase
+        .from("vehicles")
+        .select(
+          "id, file_no, make, model, year, colour, vin, engine_number, status, legacy_status_note, current_mileage, next_service_km, next_service_date, last_serviced_by, tracker_supplier, tracker_running, natis_on_file, license_disc_expiry, has_spare_key, warranty_active, warranty_notes, has_contract_file"
+        )
+        .order("file_no"),
+      supabase.from("vehicle_registrations").select("vehicle_id, plate_number").is("effective_to", null),
+      canManage
         ? supabase
             .from("contracts")
             .select(
               "vehicle_id, client_id, start_date, end_date, installment_amount, payment_method, potential_sale_price, purchase_price, total_collected, residual_value, is_paid_up"
             )
             .eq("status", "active")
-            .in("vehicle_id", vehicleIds)
         : Promise.resolve({ data: [] as ActiveContractRow[] }),
-      canManage && vehicleIds.length
-        ? supabase
-            .from("contracts")
-            .select("vehicle_id, client_id")
-            .neq("status", "active")
-            .in("vehicle_id", vehicleIds)
+      canManage
+        ? supabase.from("contracts").select("vehicle_id, client_id").neq("status", "active")
         : Promise.resolve({ data: [] as PastContractRow[] }),
+      canManage
+        ? supabase.from("clients").select("id, full_name, cell_number")
+        : Promise.resolve({ data: [] as { id: string; full_name: string; cell_number: string }[] }),
     ]);
-
-  const clientIds = Array.from(
-    new Set([
-      ...(activeContracts ?? []).map((c) => c.client_id),
-      ...(pastContracts ?? []).map((c) => c.client_id),
-    ])
-  );
-  const { data: clients } = clientIds.length
-    ? await supabase.from("clients").select("id, full_name, cell_number").in("id", clientIds)
-    : { data: [] as { id: string; full_name: string; cell_number: string }[] };
 
   const clientById = new Map((clients ?? []).map((c) => [c.id, c]));
   const plateByVehicle = new Map((registrations ?? []).map((r) => [r.vehicle_id, r.plate_number]));
@@ -127,7 +117,7 @@ export default async function VehiclesPage({ searchParams }: PageProps<"/vehicle
         {canManage && <VehiclePanel />}
       </div>
 
-      <FleetStatsCards />
+      <FleetStatsCards active={activeStatFilter} />
 
       <VehiclesTable
         rows={rows}

@@ -2,7 +2,6 @@ import { redirect } from "next/navigation";
 
 import { createClient as createSupabaseServerClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/auth/current-profile";
-import type { BankAccountType } from "@/lib/database.types";
 
 import { ClientPanel } from "./client-panel";
 import { ClientsTable } from "./clients-table";
@@ -15,26 +14,17 @@ export default async function ClientsPage() {
   }
 
   const supabase = await createSupabaseServerClient();
-  const { data: clients } = await supabase
-    .from("clients")
-    .select("id, full_name, id_number, cell_number, alt_cell_number, email, address, notes")
-    .order("full_name");
-
-  const clientIds = (clients ?? []).map((c) => c.id);
-  interface BankingRow {
-    id: string;
-    client_id: string;
-    bank_name: string;
-    account_type: BankAccountType;
-    branch_code: string | null;
-    account_number_last4: string;
-  }
-  const { data: banking } = clientIds.length
-    ? await supabase
-        .from("client_banking_details")
-        .select("id, client_id, bank_name, account_type, branch_code, account_number_last4")
-        .in("client_id", clientIds)
-    : { data: [] as BankingRow[] };
+  // Banking details aren't filtered by client id here (a small table,
+  // fetched in full) so this doesn't wait on the clients query first.
+  const [{ data: clients }, { data: banking }] = await Promise.all([
+    supabase
+      .from("clients")
+      .select("id, full_name, id_number, cell_number, alt_cell_number, email, address, notes")
+      .order("full_name"),
+    supabase
+      .from("client_banking_details")
+      .select("id, client_id, bank_name, account_type, branch_code, account_number_last4"),
+  ]);
 
   const bankingByClient = new Map((banking ?? []).map((b) => [b.client_id, b]));
 
