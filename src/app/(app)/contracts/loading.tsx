@@ -1,5 +1,5 @@
-import { TablePageSkeleton } from "@/components/ui/table-page-skeleton";
+import { Spinner } from "@/components/ui/spinner";
 
 export default function Loading() {
-  return <TablePageSkeleton />;
+  return <Spinner />;
 }

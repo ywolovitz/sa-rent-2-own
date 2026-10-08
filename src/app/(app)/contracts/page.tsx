@@ -4,7 +4,6 @@ import { createClient as createSupabaseServerClient } from "@/lib/supabase/serve
 import { getCurrentProfile } from "@/lib/auth/current-profile";
 import { isoDaysFromNow } from "@/lib/date-ranges";
 
-import { ContractPanel } from "./contract-panel";
 import { ContractsTable } from "./contracts-table";
 import type { ContractRow, SelectableClient, SelectableVehicle } from "./types";
 
@@ -83,11 +82,6 @@ export default async function ContractsPage({ searchParams }: PageProps<"/contra
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold tracking-tight">Contracts</h1>
-        <ContractPanel vehicles={selectableVehicles} clients={selectableClients} />
-      </div>
-
       <ContractsTable
         rows={rows}
         vehicles={selectableVehicles}

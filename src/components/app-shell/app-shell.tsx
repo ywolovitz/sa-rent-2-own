@@ -72,13 +72,14 @@ export function AppShell({
           </Button>
         </div>
         <SidebarNav role={profile.role} collapsed={collapsed} />
+        <div className={cn("mt-auto border-t border-white/10 p-2", collapsed && "flex justify-center")}>
+          <UserMenu fullName={profile.fullName} role={profile.role} variant="sidebar" collapsed={collapsed} />
+        </div>
       </aside>
       <div className="flex flex-1 flex-col overflow-hidden">
-        <header className="flex h-14 shrink-0 items-center justify-between border-b px-4">
-          <div className="font-semibold tracking-tight md:hidden">SAR2O Fleet</div>
-          <div className="ml-auto flex items-center gap-2">
-            <UserMenu fullName={profile.fullName} role={profile.role} />
-          </div>
+        <header className="flex h-14 shrink-0 items-center justify-between border-b px-4 md:hidden">
+          <div className="font-semibold tracking-tight">SAR2O Fleet</div>
+          <UserMenu fullName={profile.fullName} role={profile.role} />
         </header>
         <main className="bg-surface-sunken flex-1 overflow-y-auto p-4 md:p-6">{children}</main>
       </div>

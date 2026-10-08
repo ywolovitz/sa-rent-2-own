@@ -658,48 +658,52 @@ export function VehiclesTable({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4">
-      <div className="flex flex-wrap gap-2">
-        <StatButtonPill
-          label="Fleet"
-          value={fleetCount}
-          subtitle="Total vehicles"
-          isActive={statusFilter === "all" && !serviceDueSoon && !contractEndingSoon}
-          onClick={() => selectStatus("all")}
-        />
-        <StatButtonPill
-          label="Active"
-          value={activeCount}
-          subtitle="On road"
-          isActive={statusFilter === "on_road"}
-          onClick={() => selectStatus("on_road")}
-        />
-        <StatButtonPill
-          label="Idle"
-          value={idleCount}
-          subtitle="Parked"
-          isActive={statusFilter === "parked"}
-          onClick={() => selectStatus("parked")}
-        />
-        <StatButtonPill
-          label="Workshop"
-          value={workshopCount}
-          subtitle="In repair"
-          isActive={statusFilter === "in_repair"}
-          onClick={() => selectStatus("in_repair")}
-        />
-        <StatButtonPill
-          label="Servicing"
-          value={servicingDueSoonCount}
-          subtitle="Due within 30 days"
-          isActive={serviceDueSoon}
-          onClick={toggleServiceDueSoon}
-        />
-        <StatLinkPill
-          label="Contracts"
-          value={contractsEndingSoonCount}
-          subtitle="Ending within 3 months"
-          href="/contracts?ending=soon"
-        />
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h1 className="text-2xl font-semibold tracking-tight">Vehicles</h1>
+        <div className="flex flex-wrap items-center gap-2">
+          {canManage && <VehiclePanel />}
+          <StatButtonPill
+            label="Fleet"
+            value={fleetCount}
+            subtitle="Total vehicles"
+            isActive={statusFilter === "all" && !serviceDueSoon && !contractEndingSoon}
+            onClick={() => selectStatus("all")}
+          />
+          <StatButtonPill
+            label="Active"
+            value={activeCount}
+            subtitle="On road"
+            isActive={statusFilter === "on_road"}
+            onClick={() => selectStatus("on_road")}
+          />
+          <StatButtonPill
+            label="Idle"
+            value={idleCount}
+            subtitle="Parked"
+            isActive={statusFilter === "parked"}
+            onClick={() => selectStatus("parked")}
+          />
+          <StatButtonPill
+            label="Workshop"
+            value={workshopCount}
+            subtitle="In repair"
+            isActive={statusFilter === "in_repair"}
+            onClick={() => selectStatus("in_repair")}
+          />
+          <StatButtonPill
+            label="Servicing"
+            value={servicingDueSoonCount}
+            subtitle="Due within 30 days"
+            isActive={serviceDueSoon}
+            onClick={toggleServiceDueSoon}
+          />
+          <StatLinkPill
+            label="Contracts"
+            value={contractsEndingSoonCount}
+            subtitle="Ending within 3 months"
+            href="/contracts?ending=soon"
+          />
+        </div>
       </div>
 
       <div className="flex flex-wrap items-center gap-3">

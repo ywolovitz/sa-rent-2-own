@@ -170,44 +170,48 @@ export function ContractsTable({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4">
-      <div className="flex flex-wrap gap-2">
-        <StatLinkPill
-          label="Fleet"
-          value={vehicleStatFilters.fleetCount}
-          subtitle="Total vehicles"
-          href="/vehicles"
-        />
-        <StatLinkPill
-          label="Active"
-          value={vehicleStatFilters.activeCount}
-          subtitle="On road"
-          href="/vehicles?status=on_road"
-        />
-        <StatLinkPill
-          label="Idle"
-          value={vehicleStatFilters.idleCount}
-          subtitle="Parked"
-          href="/vehicles?status=parked"
-        />
-        <StatLinkPill
-          label="Workshop"
-          value={vehicleStatFilters.workshopCount}
-          subtitle="In repair"
-          href="/vehicles?status=in_repair"
-        />
-        <StatLinkPill
-          label="Servicing"
-          value={vehicleStatFilters.servicingDueSoonCount}
-          subtitle="Due within 30 days"
-          href="/vehicles?service=due_soon"
-        />
-        <StatButtonPill
-          label="Contracts"
-          value={endingSoonCount}
-          subtitle="Ending within 3 months"
-          isActive={endingSoon}
-          onClick={() => setEndingSoon((v) => !v)}
-        />
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h1 className="text-2xl font-semibold tracking-tight">Contracts</h1>
+        <div className="flex flex-wrap items-center gap-2">
+          <ContractPanel vehicles={vehicles} clients={clients} />
+          <StatLinkPill
+            label="Fleet"
+            value={vehicleStatFilters.fleetCount}
+            subtitle="Total vehicles"
+            href="/vehicles"
+          />
+          <StatLinkPill
+            label="Active"
+            value={vehicleStatFilters.activeCount}
+            subtitle="On road"
+            href="/vehicles?status=on_road"
+          />
+          <StatLinkPill
+            label="Idle"
+            value={vehicleStatFilters.idleCount}
+            subtitle="Parked"
+            href="/vehicles?status=parked"
+          />
+          <StatLinkPill
+            label="Workshop"
+            value={vehicleStatFilters.workshopCount}
+            subtitle="In repair"
+            href="/vehicles?status=in_repair"
+          />
+          <StatLinkPill
+            label="Servicing"
+            value={vehicleStatFilters.servicingDueSoonCount}
+            subtitle="Due within 30 days"
+            href="/vehicles?service=due_soon"
+          />
+          <StatButtonPill
+            label="Contracts"
+            value={endingSoonCount}
+            subtitle="Ending within 3 months"
+            isActive={endingSoon}
+            onClick={() => setEndingSoon((v) => !v)}
+          />
+        </div>
       </div>
 
       <div className="flex flex-wrap items-center gap-3">

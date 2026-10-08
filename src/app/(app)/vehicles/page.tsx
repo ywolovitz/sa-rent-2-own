@@ -4,7 +4,6 @@ import { isoDaysFromNow } from "@/lib/date-ranges";
 import type { PaymentMethod } from "@/lib/database.types";
 import { vehicleStatusValues } from "./schema";
 
-import { VehiclePanel } from "./vehicle-panel";
 import { VehiclesTable } from "./vehicles-table";
 import type { VehicleWithRegistration } from "./types";
 
@@ -109,11 +108,6 @@ export default async function VehiclesPage({ searchParams }: PageProps<"/vehicle
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold tracking-tight">Vehicles</h1>
-        {canManage && <VehiclePanel />}
-      </div>
-
       <VehiclesTable
         rows={rows}
         canManage={canManage}
