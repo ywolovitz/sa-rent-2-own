@@ -173,7 +173,7 @@ export function ContractPanel({
               Edit
             </Button>
           ) : (
-            <Button>
+            <Button variant="destructive">
               <Plus />
               Add contract
             </Button>

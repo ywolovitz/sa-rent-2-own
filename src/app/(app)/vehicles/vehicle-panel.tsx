@@ -143,7 +143,7 @@ export function VehiclePanel({
               Edit
             </Button>
           ) : (
-            <Button>
+            <Button variant="destructive">
               <Plus />
               Add vehicle
             </Button>
