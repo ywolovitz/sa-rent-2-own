@@ -449,6 +449,37 @@ export function VehiclesTable({
   const [contractEndingSoon, setContractEndingSoon] = useState(initialContractEndingSoon ?? false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
+  // Status, "due for service", and "contract ending" are presented as one
+  // set of quick filters (the pill row, plus this dropdown and button), so
+  // picking one clears the others — combining them silently intersects to
+  // an empty, confusing result (e.g. Idle + Contract ending, when no idle
+  // vehicle's contract happens to be ending soon).
+  function selectStatus(status: "all" | VehicleStatus) {
+    setStatusFilter(status);
+    setServiceDueSoon(false);
+    setContractEndingSoon(false);
+  }
+  function toggleServiceDueSoon() {
+    setServiceDueSoon((was) => {
+      const next = !was;
+      if (next) {
+        setStatusFilter("all");
+        setContractEndingSoon(false);
+      }
+      return next;
+    });
+  }
+  function toggleContractEndingSoon() {
+    setContractEndingSoon((was) => {
+      const next = !was;
+      if (next) {
+        setStatusFilter("all");
+        setServiceDueSoon(false);
+      }
+      return next;
+    });
+  }
+
   const { order, isHidden, reorder, toggleHidden, reset } = useColumnOrder(
     "sar2o:vehicles-columns",
     DEFAULT_COLUMN_ORDER,
@@ -633,39 +664,35 @@ export function VehiclesTable({
           value={fleetCount}
           subtitle="Total vehicles"
           isActive={statusFilter === "all" && !serviceDueSoon && !contractEndingSoon}
-          onClick={() => {
-            setStatusFilter("all");
-            setServiceDueSoon(false);
-            setContractEndingSoon(false);
-          }}
+          onClick={() => selectStatus("all")}
         />
         <StatButtonPill
           label="Active"
           value={activeCount}
           subtitle="On road"
           isActive={statusFilter === "on_road"}
-          onClick={() => setStatusFilter("on_road")}
+          onClick={() => selectStatus("on_road")}
         />
         <StatButtonPill
           label="Idle"
           value={idleCount}
           subtitle="Parked"
           isActive={statusFilter === "parked"}
-          onClick={() => setStatusFilter("parked")}
+          onClick={() => selectStatus("parked")}
         />
         <StatButtonPill
           label="Workshop"
           value={workshopCount}
           subtitle="In repair"
           isActive={statusFilter === "in_repair"}
-          onClick={() => setStatusFilter("in_repair")}
+          onClick={() => selectStatus("in_repair")}
         />
         <StatButtonPill
           label="Servicing"
           value={servicingDueSoonCount}
           subtitle="Due within 30 days"
           isActive={serviceDueSoon}
-          onClick={() => setServiceDueSoon((v) => !v)}
+          onClick={toggleServiceDueSoon}
         />
         <StatLinkPill
           label="Contracts"
@@ -682,7 +709,7 @@ export function VehiclesTable({
           onChange={(e) => setSearch(e.target.value)}
           className="bg-background max-w-xs"
         />
-        <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as "all" | VehicleStatus)}>
+        <Select value={statusFilter} onValueChange={(v) => selectStatus(v as "all" | VehicleStatus)}>
           <SelectTrigger className="bg-background w-44">
             <SelectValue />
           </SelectTrigger>
@@ -700,7 +727,7 @@ export function VehiclesTable({
             type="button"
             variant={contractEndingSoon ? "default" : "outline"}
             size="sm"
-            onClick={() => setContractEndingSoon((v) => !v)}
+            onClick={toggleContractEndingSoon}
           >
             Contract ending
           </Button>
