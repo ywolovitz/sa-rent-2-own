@@ -1,55 +1,15 @@
-import Link from "next/link";
-
-import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/server";
 import { isoDaysFromNow } from "@/lib/date-ranges";
 import type { VehicleStatus } from "@/lib/database.types";
 
-export type FleetStatFilter = "fleet" | "on_road" | "parked" | "in_repair" | "due_soon" | "ending_soon";
+import { StatLinkPill } from "./stat-pill";
 
-function StatCard({
-  label,
-  value,
-  subtitle,
-  href,
-  isActive,
-}: {
-  label: string;
-  value: number;
-  subtitle: string;
-  href: string;
-  isActive: boolean;
-}) {
-  return (
-    <Link
-      href={href}
-      title={subtitle}
-      aria-current={isActive ? "true" : undefined}
-      className={cn(
-        "flex items-center gap-2 rounded-md px-3 py-1.5 transition-colors",
-        isActive ? "bg-primary text-primary-foreground" : "bg-muted hover:bg-muted/70"
-      )}
-    >
-      <span
-        className={cn(
-          "text-xs font-semibold tracking-wide uppercase",
-          isActive ? "text-primary-foreground" : "text-destructive"
-        )}
-      >
-        {label}
-      </span>
-      <span className="text-sm font-bold tabular-nums">{value}</span>
-    </Link>
-  );
-}
-
-/** Self-contained so it can drop into any page (Dashboard, Vehicles,
- * Contracts) without threading fleet-wide counts through each page's
- * own data-fetching. `active` lets the calling page (which already knows
- * its own current filter from searchParams) highlight the matching card —
- * these cards are real filters, not just a static summary, so the current
- * one should look selected. */
-export async function FleetStatsCards({ active }: { active?: FleetStatFilter } = {}) {
+/** Dashboard-only summary + navigation row — links into pre-filtered
+ * Vehicles/Contracts views. Vehicles and Contracts render their own local
+ * equivalent of these same filters as instant buttons (see VehiclesTable /
+ * ContractsTable) instead of this, since clicking a card to re-fetch the
+ * page you're already on felt like a real navigation, not a filter. */
+export async function FleetStatsCards() {
   const supabase = await createClient();
 
   const contractsEndingCutoff = isoDaysFromNow(90);
@@ -86,47 +46,31 @@ export async function FleetStatsCards({ active }: { active?: FleetStatFilter } =
 
   return (
     <div className="flex flex-wrap gap-2">
-      <StatCard
-        label="Fleet"
-        value={total}
-        subtitle="Total vehicles"
-        href="/vehicles"
-        isActive={active === "fleet"}
-      />
-      <StatCard
+      <StatLinkPill label="Fleet" value={total} subtitle="Total vehicles" href="/vehicles" />
+      <StatLinkPill
         label="Active"
         value={counts.on_road}
         subtitle="On road"
         href="/vehicles?status=on_road"
-        isActive={active === "on_road"}
       />
-      <StatCard
-        label="Idle"
-        value={counts.parked}
-        subtitle="Parked"
-        href="/vehicles?status=parked"
-        isActive={active === "parked"}
-      />
-      <StatCard
+      <StatLinkPill label="Idle" value={counts.parked} subtitle="Parked" href="/vehicles?status=parked" />
+      <StatLinkPill
         label="Workshop"
         value={counts.in_repair}
         subtitle="In repair"
         href="/vehicles?status=in_repair"
-        isActive={active === "in_repair"}
       />
-      <StatCard
+      <StatLinkPill
         label="Servicing"
         value={servicingDueSoonCount}
         subtitle="Due within 30 days"
         href="/vehicles?service=due_soon"
-        isActive={active === "due_soon"}
       />
-      <StatCard
+      <StatLinkPill
         label="Contracts"
         value={endingSoonCount ?? 0}
         subtitle="Ending within 3 months"
         href="/contracts?ending=soon"
-        isActive={active === "ending_soon"}
       />
     </div>
   );

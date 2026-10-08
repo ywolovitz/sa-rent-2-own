@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useState } from "react";
-import { Download, X } from "lucide-react";
+import { Download } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/select";
 import { SortableHead } from "@/components/ui/sortable-head";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { StatButtonPill, StatLinkPill } from "@/components/dashboard/stat-pill";
 import { isoDaysFromNow } from "@/lib/date-ranges";
 import { exportToExcel, summarizeFilters, type ExportColumn } from "@/lib/export-to-excel";
 import { compareNumbers, compareStrings, useTableControls } from "@/lib/use-table-controls";
@@ -67,12 +68,20 @@ export function ContractsTable({
   vehicles,
   clients,
   initialEndingSoon,
+  vehicleStatFilters,
   exportedBy,
 }: {
   rows: ContractRow[];
   vehicles: SelectableVehicle[];
   clients: SelectableClient[];
   initialEndingSoon?: boolean;
+  vehicleStatFilters: {
+    fleetCount: number;
+    activeCount: number;
+    idleCount: number;
+    workshopCount: number;
+    servicingDueSoonCount: number;
+  };
   exportedBy: string;
 }) {
   const [statusFilter, setStatusFilter] = useState<"all" | ContractStatus>("all");
@@ -99,6 +108,9 @@ export function ContractsTable({
   } satisfies Record<SortKey, (a: ContractRow, b: ContractRow) => number>;
 
   const endingSoonCutoff = isoDaysFromNow(90);
+  // Matches the preFiltered predicate below exactly, so the pill's count is
+  // always what clicking it actually shows.
+  const endingSoonCount = rows.filter((r) => r.end_date && r.end_date <= endingSoonCutoff).length;
   const preFiltered = rows
     .filter((r) => statusFilter === "all" || r.status === statusFilter)
     .filter((r) => typeFilter === "all" || r.contract_type === typeFilter)
@@ -158,6 +170,46 @@ export function ContractsTable({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4">
+      <div className="flex flex-wrap gap-2">
+        <StatLinkPill
+          label="Fleet"
+          value={vehicleStatFilters.fleetCount}
+          subtitle="Total vehicles"
+          href="/vehicles"
+        />
+        <StatLinkPill
+          label="Active"
+          value={vehicleStatFilters.activeCount}
+          subtitle="On road"
+          href="/vehicles?status=on_road"
+        />
+        <StatLinkPill
+          label="Idle"
+          value={vehicleStatFilters.idleCount}
+          subtitle="Parked"
+          href="/vehicles?status=parked"
+        />
+        <StatLinkPill
+          label="Workshop"
+          value={vehicleStatFilters.workshopCount}
+          subtitle="In repair"
+          href="/vehicles?status=in_repair"
+        />
+        <StatLinkPill
+          label="Servicing"
+          value={vehicleStatFilters.servicingDueSoonCount}
+          subtitle="Due within 30 days"
+          href="/vehicles?service=due_soon"
+        />
+        <StatButtonPill
+          label="Contracts"
+          value={endingSoonCount}
+          subtitle="Ending within 3 months"
+          isActive={endingSoon}
+          onClick={() => setEndingSoon((v) => !v)}
+        />
+      </div>
+
       <div className="flex flex-wrap items-center gap-3">
         <Input
           placeholder="Search vehicle or client…"
@@ -191,12 +243,6 @@ export function ContractsTable({
             ))}
           </SelectContent>
         </Select>
-        {endingSoon && (
-          <Button type="button" variant="secondary" size="sm" onClick={() => setEndingSoon(false)}>
-            Ending within 3 months
-            <X />
-          </Button>
-        )}
         <Button type="button" variant="outline" size="sm" onClick={handleExport}>
           <Download />
           Export

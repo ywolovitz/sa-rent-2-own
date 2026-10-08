@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/auth/current-profile";
-import { FleetStatsCards, type FleetStatFilter } from "@/components/dashboard/fleet-stats-cards";
+import { isoDaysFromNow } from "@/lib/date-ranges";
 import type { PaymentMethod } from "@/lib/database.types";
 import { vehicleStatusValues } from "./schema";
 
@@ -18,14 +18,6 @@ export default async function VehiclesPage({ searchParams }: PageProps<"/vehicle
   const initialStatus = vehicleStatusValues.find((s) => s === statusParam);
   const initialServiceDueSoon = firstParam(params.service) === "due_soon";
   const initialContractEndingSoon = firstParam(params.contract) === "ending_soon";
-
-  const activeStatFilter: FleetStatFilter | undefined = initialServiceDueSoon
-    ? "due_soon"
-    : initialStatus === "on_road" || initialStatus === "parked" || initialStatus === "in_repair"
-      ? initialStatus
-      : initialStatus
-        ? undefined
-        : "fleet";
 
   const [profile, supabase] = await Promise.all([getCurrentProfile(), createClient()]);
   const canManage = profile?.role === "admin" || profile?.role === "manager";
@@ -76,6 +68,11 @@ export default async function VehiclesPage({ searchParams }: PageProps<"/vehicle
         : Promise.resolve({ data: [] as { id: string; full_name: string; cell_number: string }[] }),
     ]);
 
+  const contractsEndingCutoff = isoDaysFromNow(90);
+  const contractsEndingSoonCount = (activeContracts ?? []).filter(
+    (c) => c.end_date && c.end_date <= contractsEndingCutoff
+  ).length;
+
   const clientById = new Map((clients ?? []).map((c) => [c.id, c]));
   const plateByVehicle = new Map((registrations ?? []).map((r) => [r.vehicle_id, r.plate_number]));
   const activeContractByVehicle = new Map((activeContracts ?? []).map((c) => [c.vehicle_id, c]));
@@ -117,14 +114,13 @@ export default async function VehiclesPage({ searchParams }: PageProps<"/vehicle
         {canManage && <VehiclePanel />}
       </div>
 
-      <FleetStatsCards active={activeStatFilter} />
-
       <VehiclesTable
         rows={rows}
         canManage={canManage}
         initialStatus={initialStatus}
         initialServiceDueSoon={initialServiceDueSoon}
         initialContractEndingSoon={initialContractEndingSoon}
+        contractsEndingSoonCount={contractsEndingSoonCount}
         exportedBy={profile?.fullName ?? "Unknown"}
       />
     </div>

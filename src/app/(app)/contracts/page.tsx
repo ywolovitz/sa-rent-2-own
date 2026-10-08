@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 
 import { createClient as createSupabaseServerClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/auth/current-profile";
-import { FleetStatsCards, type FleetStatFilter } from "@/components/dashboard/fleet-stats-cards";
+import { isoDaysFromNow } from "@/lib/date-ranges";
 
 import { ContractPanel } from "./contract-panel";
 import { ContractsTable } from "./contracts-table";
@@ -15,7 +15,6 @@ function firstParam(value: string | string[] | undefined) {
 export default async function ContractsPage({ searchParams }: PageProps<"/contracts">) {
   const params = await searchParams;
   const initialEndingSoon = firstParam(params.ending) === "soon";
-  const activeStatFilter: FleetStatFilter | undefined = initialEndingSoon ? "ending_soon" : undefined;
 
   const profile = await getCurrentProfile();
   if (!profile || (profile.role !== "admin" && profile.role !== "manager")) {
@@ -32,7 +31,7 @@ export default async function ContractsPage({ searchParams }: PageProps<"/contra
           "id, vehicle_id, client_id, contract_type, status, start_date, end_date, payment_method, installment_amount, purchase_price, potential_sale_price, sale_price, residual_value, total_collected, outstanding_balance, arrears_amount, is_paid_up, notes"
         )
         .order("start_date", { ascending: false }),
-      supabase.from("vehicles").select("id, file_no, make, model, year"),
+      supabase.from("vehicles").select("id, file_no, make, model, year, status, next_service_date"),
       supabase.from("clients").select("id, full_name").order("full_name"),
       supabase.from("vehicle_registrations").select("vehicle_id, plate_number").is("effective_to", null),
       supabase.from("str_deal_details").select("contract_id, billing_day, billing_direction, billing_frequency"),
@@ -47,6 +46,17 @@ export default async function ContractsPage({ searchParams }: PageProps<"/contra
   const vehicleById = new Map((vehicles ?? []).map((v) => [v.id, v]));
   const clientById = new Map((clients ?? []).map((c) => [c.id, c.full_name]));
   const strByContract = new Map((strDetails ?? []).map((s) => [s.contract_id, s]));
+
+  const serviceDueCutoff = isoDaysFromNow(30);
+  const vehicleStatFilters = {
+    fleetCount: (vehicles ?? []).length,
+    activeCount: (vehicles ?? []).filter((v) => v.status === "on_road").length,
+    idleCount: (vehicles ?? []).filter((v) => v.status === "parked").length,
+    workshopCount: (vehicles ?? []).filter((v) => v.status === "in_repair").length,
+    servicingDueSoonCount: (vehicles ?? []).filter(
+      (v) => v.next_service_date && v.next_service_date <= serviceDueCutoff
+    ).length,
+  };
 
   const activeVehicleIds = new Set(
     (contracts ?? []).filter((c) => c.status === "active").map((c) => c.vehicle_id)
@@ -78,13 +88,12 @@ export default async function ContractsPage({ searchParams }: PageProps<"/contra
         <ContractPanel vehicles={selectableVehicles} clients={selectableClients} />
       </div>
 
-      <FleetStatsCards active={activeStatFilter} />
-
       <ContractsTable
         rows={rows}
         vehicles={selectableVehicles}
         clients={selectableClients}
         initialEndingSoon={initialEndingSoon}
+        vehicleStatFilters={vehicleStatFilters}
         exportedBy={profile.fullName}
       />
     </div>

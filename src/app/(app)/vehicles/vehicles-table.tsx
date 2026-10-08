@@ -30,6 +30,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { StatButtonPill, StatLinkPill } from "@/components/dashboard/stat-pill";
 import { daysUntil, formatDayCount, isoDaysFromNow } from "@/lib/date-ranges";
 import { exportToExcel, summarizeFilters, type ExportColumn } from "@/lib/export-to-excel";
 import { useColumnOrder } from "@/lib/use-column-order";
@@ -432,6 +433,7 @@ export function VehiclesTable({
   initialStatus,
   initialServiceDueSoon,
   initialContractEndingSoon,
+  contractsEndingSoonCount,
   exportedBy,
 }: {
   rows: VehicleWithRegistration[];
@@ -439,6 +441,7 @@ export function VehiclesTable({
   initialStatus?: VehicleStatus;
   initialServiceDueSoon?: boolean;
   initialContractEndingSoon?: boolean;
+  contractsEndingSoonCount: number;
   exportedBy: string;
 }) {
   const [statusFilter, setStatusFilter] = useState<"all" | VehicleStatus>(initialStatus ?? "all");
@@ -547,6 +550,18 @@ export function VehiclesTable({
 
   const serviceDueCutoff = isoDaysFromNow(30);
   const contractEndingCutoff = isoDaysFromNow(30);
+
+  // Quick-filter pill counts — always against the full dataset, not
+  // preFiltered/filteredRows, so they read as stable totals rather than
+  // shrinking as other filters narrow the table.
+  const fleetCount = rows.length;
+  const activeCount = rows.filter((r) => r.status === "on_road").length;
+  const idleCount = rows.filter((r) => r.status === "parked").length;
+  const workshopCount = rows.filter((r) => r.status === "in_repair").length;
+  const servicingDueSoonCount = rows.filter(
+    (r) => r.next_service_date && r.next_service_date <= serviceDueCutoff
+  ).length;
+
   const preFiltered = rows
     .filter((r) => statusFilter === "all" || r.status === statusFilter)
     .filter((r) => !serviceDueSoon || (r.next_service_date && r.next_service_date <= serviceDueCutoff))
@@ -612,6 +627,54 @@ export function VehiclesTable({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4">
+      <div className="flex flex-wrap gap-2">
+        <StatButtonPill
+          label="Fleet"
+          value={fleetCount}
+          subtitle="Total vehicles"
+          isActive={statusFilter === "all" && !serviceDueSoon && !contractEndingSoon}
+          onClick={() => {
+            setStatusFilter("all");
+            setServiceDueSoon(false);
+            setContractEndingSoon(false);
+          }}
+        />
+        <StatButtonPill
+          label="Active"
+          value={activeCount}
+          subtitle="On road"
+          isActive={statusFilter === "on_road"}
+          onClick={() => setStatusFilter("on_road")}
+        />
+        <StatButtonPill
+          label="Idle"
+          value={idleCount}
+          subtitle="Parked"
+          isActive={statusFilter === "parked"}
+          onClick={() => setStatusFilter("parked")}
+        />
+        <StatButtonPill
+          label="Workshop"
+          value={workshopCount}
+          subtitle="In repair"
+          isActive={statusFilter === "in_repair"}
+          onClick={() => setStatusFilter("in_repair")}
+        />
+        <StatButtonPill
+          label="Servicing"
+          value={servicingDueSoonCount}
+          subtitle="Due within 30 days"
+          isActive={serviceDueSoon}
+          onClick={() => setServiceDueSoon((v) => !v)}
+        />
+        <StatLinkPill
+          label="Contracts"
+          value={contractsEndingSoonCount}
+          subtitle="Ending within 3 months"
+          href="/contracts?ending=soon"
+        />
+      </div>
+
       <div className="flex flex-wrap items-center gap-3">
         <Input
           placeholder="Search reg, model, client…"
@@ -632,14 +695,6 @@ export function VehiclesTable({
             ))}
           </SelectContent>
         </Select>
-        <Button
-          type="button"
-          variant={serviceDueSoon ? "default" : "outline"}
-          size="sm"
-          onClick={() => setServiceDueSoon((v) => !v)}
-        >
-          Due for service
-        </Button>
         {canManage && (
           <Button
             type="button"
