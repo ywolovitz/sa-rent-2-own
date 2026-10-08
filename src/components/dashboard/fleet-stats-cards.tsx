@@ -35,7 +35,18 @@ function StatCard({
 export async function FleetStatsCards() {
   const supabase = await createClient();
 
-  const { data: vehicles } = await supabase.from("vehicles").select("status, next_service_date");
+  const contractsEndingCutoff = isoDaysFromNow(90);
+
+  // Independent queries — run together instead of waterfalling.
+  const [{ data: vehicles }, { count: endingSoonCount }] = await Promise.all([
+    supabase.from("vehicles").select("status, next_service_date"),
+    supabase
+      .from("contracts")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "active")
+      .lte("end_date", contractsEndingCutoff),
+  ]);
+
   const counts: Record<VehicleStatus, number> = {
     available: 0,
     on_road: 0,
@@ -53,13 +64,6 @@ export async function FleetStatsCards() {
   const servicingDueSoonCount = (vehicles ?? []).filter(
     (v) => v.next_service_date && v.next_service_date <= serviceDueCutoff
   ).length;
-
-  const contractsEndingCutoff = isoDaysFromNow(90);
-  const { count: endingSoonCount } = await supabase
-    .from("contracts")
-    .select("id", { count: "exact", head: true })
-    .eq("status", "active")
-    .lte("end_date", contractsEndingCutoff);
 
   const total = vehicles?.length ?? 0;
 

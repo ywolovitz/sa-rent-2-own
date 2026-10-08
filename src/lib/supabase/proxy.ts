@@ -1,7 +1,8 @@
-import { createServerClient } from "@supabase/ssr";
+import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
 import { getSupabaseAnonKey, getSupabaseUrl } from "./env";
+import { VERIFIED_USER_ID_HEADER } from "./verified-user-header";
 
 const PUBLIC_PATHS = ["/login", "/setup-account"];
 
@@ -13,38 +14,51 @@ const PUBLIC_PATHS = ["/login", "/setup-account"];
  * defense, not the only one.
  */
 export async function updateSession(request: NextRequest) {
-  let response = NextResponse.next({ request });
+  let pendingCookies: { name: string; value: string; options: CookieOptions }[] = [];
+  let pendingHeaders: Record<string, string> = {};
 
   const supabase = createServerClient(getSupabaseUrl(), getSupabaseAnonKey(), {
     cookies: {
       getAll() {
         return request.cookies.getAll();
       },
-      setAll(cookiesToSet) {
+      setAll(cookiesToSet, headers) {
         for (const { name, value } of cookiesToSet) {
           request.cookies.set(name, value);
         }
-        response = NextResponse.next({ request });
-        for (const { name, value, options } of cookiesToSet) {
-          response.cookies.set(name, value, options);
-        }
+        pendingCookies = cookiesToSet;
+        pendingHeaders = headers;
       },
     },
   });
 
   const { data } = await supabase.auth.getClaims();
-  const isAuthenticated = Boolean(data?.claims);
+  const userId = data?.claims?.sub ?? null;
   const { pathname } = request.nextUrl;
   const isPublicPath = PUBLIC_PATHS.some((path) => pathname.startsWith(path));
 
-  if (!isAuthenticated && !isPublicPath) {
+  let response: NextResponse;
+
+  if (!userId && !isPublicPath) {
     const loginUrl = new URL("/login", request.url);
     loginUrl.searchParams.set("redirectTo", pathname);
-    return NextResponse.redirect(loginUrl);
+    response = NextResponse.redirect(loginUrl);
+  } else if (userId && pathname === "/login") {
+    response = NextResponse.redirect(new URL("/", request.url));
+  } else {
+    const requestHeaders = new Headers(request.headers);
+    requestHeaders.delete(VERIFIED_USER_ID_HEADER);
+    if (userId) requestHeaders.set(VERIFIED_USER_ID_HEADER, userId);
+    response = NextResponse.next({ request: { headers: requestHeaders } });
   }
 
-  if (isAuthenticated && pathname === "/login") {
-    return NextResponse.redirect(new URL("/", request.url));
+  // Applied on every branch (including redirects) so a session refresh
+  // that happened during getClaims() above is never silently dropped.
+  for (const { name, value, options } of pendingCookies) {
+    response.cookies.set(name, value, options);
+  }
+  for (const [key, value] of Object.entries(pendingHeaders)) {
+    response.headers.set(key, value);
   }
 
   return response;

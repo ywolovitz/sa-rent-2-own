@@ -163,6 +163,7 @@ Schema lives in `supabase/migrations/`, applied in filename order. `src/lib/data
   - Postgres RLS on every table (e.g. technicians scoped to vehicles via `vehicle_assignments`; banking details denied entirely to technicians)
   - Next.js Proxy (`src/lib/supabase/proxy.ts`) for route-level gating and session refresh
   - Server Actions re-check authorization server-side (never trust client-side role checks alone)
+- **Perf note**: Proxy verifies the JWT once per request (`getClaims()`, which round-trips to Supabase Auth when the project uses the default HS256 signing key) and forwards the verified user id to Server Components via a request header (`VERIFIED_USER_ID_HEADER` in `verified-user-header.ts`) instead of re-verifying it again in `getCurrentProfile()` — that duplicate round-trip was the single biggest contributor to slow page-to-page navigation. The header is set only in Proxy, after verification, and any client-supplied value is stripped first, so it can't be spoofed; a request path Proxy somehow doesn't cover still falls back to verifying the JWT directly. `getCurrentProfile()` is also wrapped in React's `cache()` so the layout and the page don't each re-query `profiles`.
 
 ## 6. Security
 
@@ -200,6 +201,7 @@ Real production data has been imported (this section is now a historical record,
 - **Excel export** — every list view (Vehicles, Clients, Contracts) has an "Export" button producing a styled `.xlsx` of exactly what's currently on screen (respecting active search/filters/sort, and for Vehicles, the current column order/visibility): a title + "Filter applied" / "Exported" timestamp / "Exported by" meta block, a brand-themed frozen header row with autofilter, zebra-striped rows, color-coded status chips matching the on-screen badges, and Rand-formatted currency columns.
 - **App shell** — collapsible branded sidebar (role-filtered nav), independent table scrolling (sidebar/header/toolbar stay fixed while only table rows scroll), responsive down to the layout level (full mobile nav is still open — see §11).
 - **Auth** — phone + password login, admin-created accounts only, first-time setup via SMS OTP (see the Twilio caveat in §5).
+- **Navigation performance** — every route has a `loading.tsx` skeleton so a nav click shows feedback instantly via Suspense streaming instead of a blank screen; the duplicate per-request auth round-trip is eliminated (see §5's perf note); `FleetStatsCards`' two independent queries run in parallel instead of waterfalling.
 
 ## 10. Import Script
 
@@ -220,3 +222,4 @@ Roughly in priority order, per the client's stated priorities:
 9. **`insurance_claims` / `sale_listings` / `rental_payment_periods`** — schema and historical source data exist; no UI module built yet.
 10. **PDF generation** — not yet started, no library chosen.
 11. **Staging environment** — currently one production Supabase project; consider a separate project for testing schema changes before they hit real data, if that becomes painful.
+12. **Collapse the Vehicles/Clients pages' sequential queries** — `vehicles/page.tsx` fetches vehicles, then (in a second wave) registrations/contracts, then (in a third wave) clients; `clients/page.tsx` similarly fetches clients then banking details. PostgREST's embedded-resource selects (e.g. `vehicles.select("*, vehicle_registrations(...), contracts(*, clients(...))")`) could collapse each into a single round trip, but `database.types.ts`'s `Relationships` arrays are currently all empty (hand-maintained, never filled in), so Supabase's type inference can't check an embedded select's shape today — that needs fixing first, and the result should be checked against a real Supabase project (ideally item 11's staging one) before it ships, which blocked doing it in the same pass as the rest of the §5 perf work.
