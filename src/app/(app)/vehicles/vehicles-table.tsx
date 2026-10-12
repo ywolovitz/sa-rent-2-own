@@ -36,6 +36,7 @@ import { exportToExcel, summarizeFilters, type ExportColumn } from "@/lib/export
 import { useColumnOrder } from "@/lib/use-column-order";
 import { compareNumbers, compareStrings, useTableControls } from "@/lib/use-table-controls";
 import { formatSaPhoneForDisplay } from "@/lib/phone";
+import { resolveVehicleColourHex } from "@/lib/vehicle-colours";
 import type { PaymentMethod, TrackerStatus, VehicleStatus } from "@/lib/database.types";
 
 import { vehicleStatusValues } from "./schema";
@@ -127,6 +128,23 @@ function PastDueDate({ date }: { date: string | null }) {
   if (!date) return <span className="text-muted-foreground">—</span>;
   const overdue = daysUntil(date) < 0;
   return <span className={overdue ? "text-destructive font-medium" : undefined}>{date}</span>;
+}
+
+function ColourChip({ name }: { name: string | null }) {
+  if (!name) return <span className="text-muted-foreground">—</span>;
+  const hex = resolveVehicleColourHex(name);
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      {hex && (
+        <span
+          className="size-3 shrink-0 rounded-full border border-black/15"
+          style={{ backgroundColor: hex }}
+          aria-hidden="true"
+        />
+      )}
+      {name}
+    </span>
+  );
 }
 
 function formatContractCountdown(date: string | null): string {
@@ -309,7 +327,7 @@ function renderCell(column: ColumnId, vehicle: VehicleWithRegistration) {
     case "year":
       return vehicle.year ?? "—";
     case "colour":
-      return vehicle.colour ?? "—";
+      return <ColourChip name={vehicle.colour} />;
     case "vin":
       return vehicle.vin ?? "—";
     case "engineNumber":
