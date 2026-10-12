@@ -36,8 +36,8 @@ export function DeleteVehicleButton({ vehicleId, label }: { vehicleId: string; l
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="ghost" size="icon" aria-label="Delete vehicle">
-          <Trash2 className="text-destructive size-4" />
+        <Button variant="ghost" size="icon" className="size-6" aria-label="Delete vehicle">
+          <Trash2 className="text-destructive size-3" />
         </Button>
       </DialogTrigger>
       <DialogContent>

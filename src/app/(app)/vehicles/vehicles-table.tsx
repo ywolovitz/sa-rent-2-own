@@ -817,10 +817,11 @@ export function VehiclesTable({
                         type="button"
                         variant="ghost"
                         size="icon"
+                        className="size-6"
                         aria-label="Edit vehicle"
                         onClick={() => setSelectedId(vehicle.id)}
                       >
-                        <Pencil className="size-4" />
+                        <Pencil className="size-3" />
                       </Button>
                       <VehiclePanel
                         vehicle={vehicle}
