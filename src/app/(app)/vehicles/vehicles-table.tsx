@@ -119,6 +119,16 @@ function ServiceCountdown({ date }: { date: string | null }) {
   );
 }
 
+/** Plain date display that turns red when the date has already passed —
+ * same "text-destructive font-medium" treatment as the countdown columns,
+ * for date columns where being in the past is itself the problem (a
+ * service date that's come and gone, a license disc that's expired). */
+function PastDueDate({ date }: { date: string | null }) {
+  if (!date) return <span className="text-muted-foreground">—</span>;
+  const overdue = daysUntil(date) < 0;
+  return <span className={overdue ? "text-destructive font-medium" : undefined}>{date}</span>;
+}
+
 function formatContractCountdown(date: string | null): string {
   if (!date) return "—";
   const diff = daysUntil(date);
@@ -313,7 +323,7 @@ function renderCell(column: ColumnId, vehicle: VehicleWithRegistration) {
     case "nextService":
       return <ServiceCountdown date={vehicle.next_service_date} />;
     case "nextServiceDate":
-      return vehicle.next_service_date ?? "—";
+      return <PastDueDate date={vehicle.next_service_date} />;
     case "monthsLeft":
       return <ContractCountdown date={vehicle.current_contract_end_date} />;
     case "currentMileage":
@@ -335,7 +345,7 @@ function renderCell(column: ColumnId, vehicle: VehicleWithRegistration) {
     case "warranty":
       return vehicle.warranty_active ? "Active" : "Inactive";
     case "licenseDiscExpiry":
-      return vehicle.license_disc_expiry ?? "—";
+      return <PastDueDate date={vehicle.license_disc_expiry} />;
     case "clientCell":
       return vehicle.current_client_cell
         ? formatSaPhoneForDisplay(vehicle.current_client_cell)
