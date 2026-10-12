@@ -41,12 +41,30 @@ const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
   auth: { autoRefreshToken: false, persistSession: false },
 });
 
+// Direct-by-id lookup first (same GoTrue endpoint updateUserById PUTs to,
+// just a GET) — isolates whether the id itself resolves before we try to
+// write anything.
+const { data: lookup, error: lookupError } = await admin.auth.admin.getUserById(userId);
+if (lookupError) {
+  console.error("getUserById also failed (lookup, before any write):", {
+    message: lookupError.message,
+    status: lookupError.status,
+    code: lookupError.code,
+  });
+  process.exit(1);
+}
+console.log("getUserById found:", { id: lookup.user.id, phone: lookup.user.phone });
+
 const { data, error } = await admin.auth.admin.updateUserById(userId, {
   password: newPassword,
 });
 
 if (error) {
-  console.error("Failed to update password:", error.message);
+  console.error("Failed to update password:", {
+    message: error.message,
+    status: error.status,
+    code: error.code,
+  });
   process.exit(1);
 }
 
