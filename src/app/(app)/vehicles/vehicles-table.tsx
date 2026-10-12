@@ -148,6 +148,7 @@ type ColumnId =
   | "legacyStatusNote"
   | "client"
   | "nextService"
+  | "nextServiceDate"
   | "monthsLeft"
   | "currentMileage"
   | "nextServiceKm"
@@ -183,6 +184,7 @@ const DEFAULT_COLUMN_ORDER: ColumnId[] = [
   "legacyStatusNote",
   "client",
   "nextService",
+  "nextServiceDate",
   "monthsLeft",
   "currentMileage",
   "nextServiceKm",
@@ -245,6 +247,7 @@ const COLUMN_LABELS: Record<ColumnId, string> = {
   legacyStatusNote: "Status/location note",
   client: "Client",
   nextService: "Next service in:",
+  nextServiceDate: "Next service date",
   monthsLeft: "Months left",
   currentMileage: "Current mileage",
   nextServiceKm: "Next service km",
@@ -309,6 +312,8 @@ function renderCell(column: ColumnId, vehicle: VehicleWithRegistration) {
       return vehicle.current_client_name ?? "—";
     case "nextService":
       return <ServiceCountdown date={vehicle.next_service_date} />;
+    case "nextServiceDate":
+      return vehicle.next_service_date ?? "—";
     case "monthsLeft":
       return <ContractCountdown date={vehicle.current_contract_end_date} />;
     case "currentMileage":
@@ -382,6 +387,8 @@ function exportValue(column: ColumnId, vehicle: VehicleWithRegistration): string
       return vehicle.current_client_name ?? "";
     case "nextService":
       return formatServiceCountdown(vehicle.next_service_date);
+    case "nextServiceDate":
+      return vehicle.next_service_date ?? "";
     case "monthsLeft":
       return formatContractCountdown(vehicle.current_contract_end_date);
     case "currentMileage":
@@ -535,6 +542,11 @@ export function VehiclesTable({
     legacyStatusNote: (a, b) => compareStrings(a.legacy_status_note, b.legacy_status_note),
     client: (a, b) => compareStrings(a.current_client_name, b.current_client_name),
     nextService: (a, b) =>
+      compareNumbers(
+        a.next_service_date ? Date.parse(a.next_service_date) : null,
+        b.next_service_date ? Date.parse(b.next_service_date) : null
+      ),
+    nextServiceDate: (a, b) =>
       compareNumbers(
         a.next_service_date ? Date.parse(a.next_service_date) : null,
         b.next_service_date ? Date.parse(b.next_service_date) : null
