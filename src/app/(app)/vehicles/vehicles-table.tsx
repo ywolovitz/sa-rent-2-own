@@ -36,7 +36,7 @@ import { exportToExcel, summarizeFilters, type ExportColumn } from "@/lib/export
 import { useColumnOrder } from "@/lib/use-column-order";
 import { compareNumbers, compareStrings, useTableControls } from "@/lib/use-table-controls";
 import { formatSaPhoneForDisplay } from "@/lib/phone";
-import { resolveVehicleColourHex } from "@/lib/vehicle-colours";
+import { readableTextColor, resolveVehicleColourHex } from "@/lib/vehicle-colours";
 import type { PaymentMethod, TrackerStatus, VehicleStatus } from "@/lib/database.types";
 
 import { vehicleStatusValues } from "./schema";
@@ -133,17 +133,14 @@ function PastDueDate({ date }: { date: string | null }) {
 function ColourChip({ name }: { name: string | null }) {
   if (!name) return <span className="text-muted-foreground">—</span>;
   const hex = resolveVehicleColourHex(name);
+  if (!hex) return <Badge variant="outline">{name}</Badge>;
   return (
-    <span className="inline-flex items-center gap-1.5">
-      {hex && (
-        <span
-          className="size-3 shrink-0 rounded-full border border-black/15"
-          style={{ backgroundColor: hex }}
-          aria-hidden="true"
-        />
-      )}
+    <Badge
+      variant="outline"
+      style={{ backgroundColor: hex, color: readableTextColor(hex), borderColor: "rgba(0,0,0,0.15)" }}
+    >
       {name}
-    </span>
+    </Badge>
   );
 }
 
