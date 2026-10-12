@@ -19,6 +19,14 @@ if (!userId || !newPassword) {
   process.exit(1);
 }
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+if (!UUID_RE.test(userId)) {
+  console.error(
+    `"${userId}" (received as ${JSON.stringify(userId)}) doesn't look like a valid UUID — check for a stray character or whitespace from copy/paste.`
+  );
+  process.exit(1);
+}
+
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
