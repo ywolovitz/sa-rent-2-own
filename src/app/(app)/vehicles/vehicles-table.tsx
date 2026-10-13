@@ -32,7 +32,7 @@ import {
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { StatButtonPill, StatLinkPill } from "@/components/dashboard/stat-pill";
 import { daysUntil, formatDayCount, isoDaysFromNow } from "@/lib/date-ranges";
-import { dueDateColorScale } from "@/lib/due-date-color";
+import { dueDateColorScale, dueDateExcelChip } from "@/lib/due-date-color";
 import { exportToExcel, summarizeFilters, type ExportColumn } from "@/lib/export-to-excel";
 import { useColumnOrder } from "@/lib/use-column-order";
 import { compareNumbers, compareStrings, useTableControls } from "@/lib/use-table-controls";
@@ -706,7 +706,12 @@ export function VehiclesTable({
                   : vehicle.current_is_paid_up
                     ? PAID_CHIP_COLORS.yes
                     : PAID_CHIP_COLORS.no
-            : undefined,
+            : column === "nextServiceDate"
+              ? (vehicle) =>
+                  vehicle.next_service_date
+                    ? dueDateExcelChip(daysUntil(vehicle.next_service_date))
+                    : undefined
+              : undefined,
     }));
 
     exportToExcel({
