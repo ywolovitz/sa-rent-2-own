@@ -32,6 +32,7 @@ import {
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { StatButtonPill, StatLinkPill } from "@/components/dashboard/stat-pill";
 import { daysUntil, formatDayCount, isoDaysFromNow } from "@/lib/date-ranges";
+import { dueDateColor } from "@/lib/due-date-color";
 import { exportToExcel, summarizeFilters, type ExportColumn } from "@/lib/export-to-excel";
 import { useColumnOrder } from "@/lib/use-column-order";
 import { compareNumbers, compareStrings, useTableControls } from "@/lib/use-table-controls";
@@ -128,6 +129,19 @@ function PastDueDate({ date }: { date: string | null }) {
   if (!date) return <span className="text-muted-foreground">—</span>;
   const overdue = daysUntil(date) < 0;
   return <span className={overdue ? "text-destructive font-medium" : undefined}>{date}</span>;
+}
+
+/** Plain date display with a red -> amber -> green font colour scale based
+ * on how far out the date is, matching the client's spreadsheet's
+ * conditional formatting. */
+function DueDateGradient({ date }: { date: string | null }) {
+  if (!date) return <span className="text-muted-foreground">—</span>;
+  const days = daysUntil(date);
+  return (
+    <span style={{ color: dueDateColor(days) }} className={days <= 0 ? "font-medium" : undefined}>
+      {date}
+    </span>
+  );
 }
 
 function ColourChip({ name }: { name: string | null }) {
@@ -342,7 +356,7 @@ function renderCell(column: ColumnId, vehicle: VehicleWithRegistration) {
     case "nextService":
       return <ServiceCountdown date={vehicle.next_service_date} />;
     case "nextServiceDate":
-      return <PastDueDate date={vehicle.next_service_date} />;
+      return <DueDateGradient date={vehicle.next_service_date} />;
     case "monthsLeft":
       return <ContractCountdown date={vehicle.current_contract_end_date} />;
     case "contractEndDate":
