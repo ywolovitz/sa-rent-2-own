@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import {
   DndContext,
   KeyboardSensor,
@@ -15,10 +15,13 @@ import {
   horizontalListSortingStrategy,
   sortableKeyboardCoordinates,
 } from "@dnd-kit/sortable";
-import { Download, Pencil } from "lucide-react";
+import { toBlob } from "html-to-image";
+import { Download, ImageDown, Pencil } from "lucide-react";
+import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { ColumnVisibilityMenu } from "@/components/ui/column-visibility-menu";
 import { DraggableTableHead } from "@/components/ui/draggable-table-head";
 import { Input } from "@/components/ui/input";
@@ -506,6 +509,8 @@ export function VehiclesTable({
   const [serviceDueSoon, setServiceDueSoon] = useState(initialServiceDueSoon ?? false);
   const [contractEndingSoon, setContractEndingSoon] = useState(initialContractEndingSoon ?? false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const captureRef = useRef<HTMLDivElement>(null);
 
   // Status, "due for service", and "contract ending" are presented as one
   // set of quick filters (the pill row, plus this dropdown and button), so
@@ -690,6 +695,65 @@ export function VehiclesTable({
   ]);
   const NUMBER_COLUMNS = new Set<ColumnId>(["currentMileage", "nextServiceKm"]);
 
+  function toggleRowSelected(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  const allVisibleSelected = filteredRows.length > 0 && filteredRows.every((r) => selectedIds.has(r.id));
+  const someVisibleSelected = filteredRows.some((r) => selectedIds.has(r.id));
+
+  function toggleSelectAllVisible() {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (allVisibleSelected) {
+        filteredRows.forEach((r) => next.delete(r.id));
+      } else {
+        filteredRows.forEach((r) => next.add(r.id));
+      }
+      return next;
+    });
+  }
+
+  const selectedRows = filteredRows.filter((r) => selectedIds.has(r.id));
+
+  async function handleCopyAsImage() {
+    if (!captureRef.current || selectedRows.length === 0) return;
+    const count = selectedRows.length;
+    let blob: Blob | null;
+    try {
+      blob = await toBlob(captureRef.current, { backgroundColor: "#ffffff", pixelRatio: 2 });
+    } catch {
+      toast.error("Couldn't create the image");
+      return;
+    }
+    if (!blob) {
+      toast.error("Couldn't create the image");
+      return;
+    }
+    try {
+      await navigator.clipboard.write([new ClipboardItem({ [blob.type]: blob })]);
+      toast.success(`Copied ${count} row${count === 1 ? "" : "s"} as an image — paste it into WhatsApp`);
+    } catch {
+      // Clipboard image writes aren't supported in every browser — fall back to a download.
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `vehicles-selection-${Date.now()}.png`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      toast.success(
+        `Downloaded an image of ${count} row${count === 1 ? "" : "s"} (clipboard copy isn't supported in this browser)`
+      );
+    }
+  }
+
   function handleExport() {
     const columns: ExportColumn<VehicleWithRegistration>[] = visibleColumns.map((column) => ({
       header: COLUMN_LABELS[column],
@@ -827,6 +891,21 @@ export function VehiclesTable({
           <Download />
           Export
         </Button>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={handleCopyAsImage}
+          disabled={selectedRows.length === 0}
+        >
+          <ImageDown />
+          Copy as image
+        </Button>
+        {selectedRows.length > 0 && (
+          <Button type="button" variant="ghost" size="sm" onClick={() => setSelectedIds(new Set())}>
+            Clear {selectedRows.length} selected
+          </Button>
+        )}
         <p className="text-muted-foreground text-sm">
           {filteredRows.length === rows.length
             ? `${rows.length} in the fleet`
@@ -844,6 +923,13 @@ export function VehiclesTable({
           <Table containerClassName="overflow-x-visible">
             <TableHeader className="bg-background sticky top-0 z-10">
               <TableRow>
+                <TableHead className="w-10">
+                  <Checkbox
+                    checked={allVisibleSelected ? true : someVisibleSelected ? "indeterminate" : false}
+                    onCheckedChange={toggleSelectAllVisible}
+                    aria-label="Select all visible rows"
+                  />
+                </TableHead>
                 <TableHead className="text-muted-foreground w-10 text-center">#</TableHead>
                 <SortableContext items={visibleColumns} strategy={horizontalListSortingStrategy}>
                   {visibleColumns.map((column) => (
@@ -868,6 +954,13 @@ export function VehiclesTable({
                   className={canManage ? "cursor-pointer" : undefined}
                   onClick={() => canManage && setSelectedId(vehicle.id)}
                 >
+                  <TableCell onClick={(e) => e.stopPropagation()}>
+                    <Checkbox
+                      checked={selectedIds.has(vehicle.id)}
+                      onCheckedChange={() => toggleRowSelected(vehicle.id)}
+                      aria-label={`Select ${vehicle.current_plate ?? vehicle.file_no}`}
+                    />
+                  </TableCell>
                   <TableCell className="text-muted-foreground text-center">{index + 1}</TableCell>
                   {visibleColumns.map((column) => (
                     <TableCell key={column} className={column === "reg" ? "font-medium" : undefined}>
@@ -906,7 +999,7 @@ export function VehiclesTable({
               {filteredRows.length === 0 && (
                 <TableRow>
                   <TableCell
-                    colSpan={visibleColumns.length + (canManage ? 1 : 0) + 1}
+                    colSpan={visibleColumns.length + (canManage ? 1 : 0) + 2}
                     className="text-muted-foreground text-center py-8"
                   >
                     No vehicles match your filters.
@@ -916,6 +1009,35 @@ export function VehiclesTable({
             </TableBody>
           </Table>
         </DndContext>
+      </div>
+
+      {/* Table captured as an image by "Copy as image" — kept fully
+          rendered (not display:none, not positioned off-screen, both of
+          which stop some browsers from ever painting it) and clipped to
+          nothing by a zero-height, overflow-hidden ancestor instead. */}
+      <div style={{ height: 0, overflow: "hidden" }} aria-hidden="true">
+        <div ref={captureRef}>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                {visibleColumns.map((column) => (
+                  <TableHead key={column}>{COLUMN_LABELS[column]}</TableHead>
+                ))}
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {selectedRows.map((vehicle) => (
+                <TableRow key={vehicle.id}>
+                  {visibleColumns.map((column) => (
+                    <TableCell key={column} className={column === "reg" ? "font-medium" : undefined}>
+                      {renderCell(column, vehicle)}
+                    </TableCell>
+                  ))}
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
       </div>
     </div>
   );
