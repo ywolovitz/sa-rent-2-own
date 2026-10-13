@@ -32,7 +32,7 @@ import {
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { StatButtonPill, StatLinkPill } from "@/components/dashboard/stat-pill";
 import { daysUntil, formatDayCount, isoDaysFromNow } from "@/lib/date-ranges";
-import { dueDateColor } from "@/lib/due-date-color";
+import { dueDateColorScale } from "@/lib/due-date-color";
 import { exportToExcel, summarizeFilters, type ExportColumn } from "@/lib/export-to-excel";
 import { useColumnOrder } from "@/lib/use-column-order";
 import { compareNumbers, compareStrings, useTableControls } from "@/lib/use-table-controls";
@@ -131,16 +131,20 @@ function PastDueDate({ date }: { date: string | null }) {
   return <span className={overdue ? "text-destructive font-medium" : undefined}>{date}</span>;
 }
 
-/** Plain date display with a red -> amber -> green font colour scale based
- * on how far out the date is, matching the client's spreadsheet's
- * conditional formatting. */
+/** Date chip with a red -> amber -> green cell-fill colour scale based on
+ * how far out the date is, matching the client's spreadsheet's conditional
+ * formatting. */
 function DueDateGradient({ date }: { date: string | null }) {
   if (!date) return <span className="text-muted-foreground">—</span>;
   const days = daysUntil(date);
+  const { background, foreground } = dueDateColorScale(days);
   return (
-    <span style={{ color: dueDateColor(days) }} className={days <= 0 ? "font-medium" : undefined}>
+    <Badge
+      variant="outline"
+      style={{ backgroundColor: background, color: foreground, borderColor: "rgba(0,0,0,0.15)" }}
+    >
       {date}
-    </span>
+    </Badge>
   );
 }
 
