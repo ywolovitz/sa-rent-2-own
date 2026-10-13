@@ -175,6 +175,7 @@ type ColumnId =
   | "nextService"
   | "nextServiceDate"
   | "monthsLeft"
+  | "contractEndDate"
   | "currentMileage"
   | "nextServiceKm"
   | "lastServicedBy"
@@ -211,6 +212,7 @@ const DEFAULT_COLUMN_ORDER: ColumnId[] = [
   "nextService",
   "nextServiceDate",
   "monthsLeft",
+  "contractEndDate",
   "currentMileage",
   "nextServiceKm",
   "lastServicedBy",
@@ -274,6 +276,7 @@ const COLUMN_LABELS: Record<ColumnId, string> = {
   nextService: "Next service in:",
   nextServiceDate: "Next service date",
   monthsLeft: "Months left",
+  contractEndDate: "Contract end date",
   currentMileage: "Current mileage",
   nextServiceKm: "Next service km",
   lastServicedBy: "Last serviced by",
@@ -299,6 +302,7 @@ const COLUMN_LABELS: Record<ColumnId, string> = {
 const MANAGER_ONLY_COLUMNS = new Set<ColumnId>([
   "client",
   "monthsLeft",
+  "contractEndDate",
   "clientCell",
   "pastClients",
   "installment",
@@ -341,6 +345,8 @@ function renderCell(column: ColumnId, vehicle: VehicleWithRegistration) {
       return <PastDueDate date={vehicle.next_service_date} />;
     case "monthsLeft":
       return <ContractCountdown date={vehicle.current_contract_end_date} />;
+    case "contractEndDate":
+      return <PastDueDate date={vehicle.current_contract_end_date} />;
     case "currentMileage":
       return vehicle.current_mileage?.toLocaleString() ?? "—";
     case "nextServiceKm":
@@ -416,6 +422,8 @@ function exportValue(column: ColumnId, vehicle: VehicleWithRegistration): string
       return vehicle.next_service_date ?? "";
     case "monthsLeft":
       return formatContractCountdown(vehicle.current_contract_end_date);
+    case "contractEndDate":
+      return vehicle.current_contract_end_date ?? "";
     case "currentMileage":
       return vehicle.current_mileage ?? "";
     case "nextServiceKm":
@@ -577,6 +585,11 @@ export function VehiclesTable({
         b.next_service_date ? Date.parse(b.next_service_date) : null
       ),
     monthsLeft: (a, b) =>
+      compareNumbers(
+        a.current_contract_end_date ? Date.parse(a.current_contract_end_date) : null,
+        b.current_contract_end_date ? Date.parse(b.current_contract_end_date) : null
+      ),
+    contractEndDate: (a, b) =>
       compareNumbers(
         a.current_contract_end_date ? Date.parse(a.current_contract_end_date) : null,
         b.current_contract_end_date ? Date.parse(b.current_contract_end_date) : null
