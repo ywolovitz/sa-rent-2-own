@@ -678,6 +678,7 @@ export function VehiclesTable({
     searchFn,
     sortFns,
     defaultSortKey: "nextService",
+    storageKey: "sar2o:vehicles-sort",
   });
 
   const MONEY_COLUMNS = new Set<ColumnId>([
