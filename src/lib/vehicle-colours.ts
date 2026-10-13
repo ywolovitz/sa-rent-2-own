@@ -51,3 +51,8 @@ export function readableTextColor(hex: string): string {
   const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
   return luminance > 0.6 ? "#1A1A1A" : "#FFFFFF";
 }
+
+/** Converts a CSS hex colour ("#RRGGBB") to Excel's ARGB format ("FFRRGGBB"). */
+export function toArgb(hex: string): string {
+  return "FF" + hex.slice(1).toUpperCase();
+}

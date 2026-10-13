@@ -37,7 +37,7 @@ import { exportToExcel, summarizeFilters, type ExportColumn } from "@/lib/export
 import { useColumnOrder } from "@/lib/use-column-order";
 import { compareNumbers, compareStrings, useTableControls } from "@/lib/use-table-controls";
 import { formatSaPhoneForDisplay } from "@/lib/phone";
-import { readableTextColor, resolveVehicleColourHex } from "@/lib/vehicle-colours";
+import { readableTextColor, resolveVehicleColourHex, toArgb } from "@/lib/vehicle-colours";
 import type { PaymentMethod, TrackerStatus, VehicleStatus } from "@/lib/database.types";
 
 import { vehicleStatusValues } from "./schema";
@@ -711,7 +711,14 @@ export function VehiclesTable({
                   vehicle.next_service_date
                     ? dueDateExcelChip(daysUntil(vehicle.next_service_date))
                     : undefined
-              : undefined,
+              : column === "colour"
+                ? (vehicle) => {
+                    if (!vehicle.colour) return undefined;
+                    const hex = resolveVehicleColourHex(vehicle.colour);
+                    if (!hex) return undefined;
+                    return { fill: toArgb(hex), font: toArgb(readableTextColor(hex)) };
+                  }
+                : undefined,
     }));
 
     exportToExcel({
