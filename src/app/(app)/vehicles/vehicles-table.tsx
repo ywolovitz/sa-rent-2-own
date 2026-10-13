@@ -34,7 +34,7 @@ import {
 } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { StatButtonPill, StatLinkPill } from "@/components/dashboard/stat-pill";
-import { daysUntil, formatDayCount, isoDaysFromNow } from "@/lib/date-ranges";
+import { daysUntil, formatDayCount, formatDisplayDate, isoDaysFromNow } from "@/lib/date-ranges";
 import { dueDateColorScale, dueDateExcelChip } from "@/lib/due-date-color";
 import { exportToExcel, summarizeFilters, type ExportColumn } from "@/lib/export-to-excel";
 import { useColumnOrder } from "@/lib/use-column-order";
@@ -131,7 +131,11 @@ function ServiceCountdown({ date }: { date: string | null }) {
 function PastDueDate({ date }: { date: string | null }) {
   if (!date) return <span className="text-muted-foreground">—</span>;
   const overdue = daysUntil(date) < 0;
-  return <span className={overdue ? "text-destructive font-medium" : undefined}>{date}</span>;
+  return (
+    <span className={overdue ? "text-destructive font-medium" : undefined}>
+      {formatDisplayDate(date)}
+    </span>
+  );
 }
 
 /** Date chip with a red -> amber -> green cell-fill colour scale based on
@@ -146,7 +150,7 @@ function DueDateGradient({ date }: { date: string | null }) {
       variant="outline"
       style={{ backgroundColor: background, color: foreground, borderColor: "rgba(0,0,0,0.15)" }}
     >
-      {date}
+      {formatDisplayDate(date)}
     </Badge>
   );
 }
@@ -403,7 +407,7 @@ function renderCell(column: ColumnId, vehicle: VehicleWithRegistration) {
     case "purchasePrice":
       return formatMoney(vehicle.current_purchase_price);
     case "purchaseDate":
-      return vehicle.current_contract_start_date ?? "—";
+      return formatDisplayDate(vehicle.current_contract_start_date);
     case "totalCollected":
       return formatMoney(vehicle.current_total_collected);
     case "residualValue":

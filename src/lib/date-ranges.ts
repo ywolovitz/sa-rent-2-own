@@ -27,3 +27,29 @@ export function formatDayCount(days: number): string {
   if (remDays === 0) return `${months} month${months === 1 ? "" : "s"}`;
   return `${months} month${months === 1 ? "" : "s"}, ${remDays} day${remDays === 1 ? "" : "s"}`;
 }
+
+const MONTH_ABBREVIATIONS = [
+  "Jan",
+  "Feb",
+  "Mar",
+  "Apr",
+  "May",
+  "Jun",
+  "Jul",
+  "Aug",
+  "Sep",
+  "Oct",
+  "Nov",
+  "Dec",
+];
+
+/** Renders an ISO date (or datetime) string as "13 Oct 2026" for display.
+ * Parses the "YYYY-MM-DD" portion directly rather than via `new Date()`,
+ * since the latter treats a date-only string as UTC midnight — shifting
+ * the displayed calendar date by a day in timezones behind UTC. */
+export function formatDisplayDate(dateStr: string | null | undefined): string {
+  if (!dateStr) return "—";
+  const [year, month, day] = dateStr.slice(0, 10).split("-").map(Number);
+  if (!year || !month || !day) return "—";
+  return `${String(day).padStart(2, "0")} ${MONTH_ABBREVIATIONS[month - 1]} ${year}`;
+}

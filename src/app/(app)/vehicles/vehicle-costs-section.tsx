@@ -17,6 +17,7 @@ import {
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
+import { formatDisplayDate } from "@/lib/date-ranges";
 
 import {
   createVehicleCost,
@@ -102,7 +103,7 @@ function CostsTable({
         <TableBody>
           {costs.map((cost) => (
             <TableRow key={cost.id}>
-              <TableCell>{cost.cost_date}</TableCell>
+              <TableCell>{formatDisplayDate(cost.cost_date)}</TableCell>
               {showType && <TableCell>{COST_TYPE_LABELS[cost.cost_type]}</TableCell>}
               <TableCell>{cost.supplier || "—"}</TableCell>
               <TableCell className="max-w-40">

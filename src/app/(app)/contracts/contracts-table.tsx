@@ -16,7 +16,7 @@ import {
 import { SortableHead } from "@/components/ui/sortable-head";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { StatButtonPill, StatLinkPill } from "@/components/dashboard/stat-pill";
-import { isoDaysFromNow } from "@/lib/date-ranges";
+import { formatDisplayDate, isoDaysFromNow } from "@/lib/date-ranges";
 import { exportToExcel, summarizeFilters, type ExportColumn } from "@/lib/export-to-excel";
 import { compareNumbers, compareStrings, useTableControls } from "@/lib/use-table-controls";
 import type { ContractStatus, ContractType } from "@/lib/database.types";
@@ -309,7 +309,7 @@ export function ContractsTable({
                     "—"
                   )}
                 </TableCell>
-                <TableCell>{row.end_date ?? "—"}</TableCell>
+                <TableCell>{formatDisplayDate(row.end_date)}</TableCell>
                 <TableCell
                   className="flex items-center justify-end gap-1"
                   onClick={(e) => e.stopPropagation()}
