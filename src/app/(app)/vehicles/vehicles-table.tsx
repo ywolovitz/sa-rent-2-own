@@ -791,7 +791,12 @@ export function VehiclesTable({
       </div>
 
       <div className="min-h-0 flex-1 overflow-auto rounded-lg border bg-background">
-        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+        <DndContext
+          id="vehicles-table-columns"
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragEnd={handleDragEnd}
+        >
           <Table containerClassName="overflow-x-visible">
             <TableHeader className="bg-background sticky top-0 z-10">
               <TableRow>
