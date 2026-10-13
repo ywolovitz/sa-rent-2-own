@@ -795,6 +795,7 @@ export function VehiclesTable({
           <Table containerClassName="overflow-x-visible">
             <TableHeader className="bg-background sticky top-0 z-10">
               <TableRow>
+                <TableHead className="text-muted-foreground w-10 text-center">#</TableHead>
                 <SortableContext items={visibleColumns} strategy={horizontalListSortingStrategy}>
                   {visibleColumns.map((column) => (
                     <DraggableTableHead
@@ -812,12 +813,13 @@ export function VehiclesTable({
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredRows.map((vehicle) => (
+              {filteredRows.map((vehicle, index) => (
                 <TableRow
                   key={vehicle.id}
                   className={canManage ? "cursor-pointer" : undefined}
                   onClick={() => canManage && setSelectedId(vehicle.id)}
                 >
+                  <TableCell className="text-muted-foreground text-center">{index + 1}</TableCell>
                   {visibleColumns.map((column) => (
                     <TableCell key={column} className={column === "reg" ? "font-medium" : undefined}>
                       {renderCell(column, vehicle)}
@@ -855,7 +857,7 @@ export function VehiclesTable({
               {filteredRows.length === 0 && (
                 <TableRow>
                   <TableCell
-                    colSpan={visibleColumns.length + (canManage ? 1 : 0)}
+                    colSpan={visibleColumns.length + (canManage ? 1 : 0) + 1}
                     className="text-muted-foreground text-center py-8"
                   >
                     No vehicles match your filters.

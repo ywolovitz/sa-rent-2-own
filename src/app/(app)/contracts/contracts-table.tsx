@@ -262,6 +262,7 @@ export function ContractsTable({
         <Table containerClassName="overflow-x-visible">
           <TableHeader className="bg-background sticky top-0 z-10">
             <TableRow>
+              <TableHead className="text-muted-foreground w-10 text-center">#</TableHead>
               <SortableHead label="Vehicle" sortKey="vehicle" activeKey={sortKey} direction={sortDir} onSort={onSort} />
               <SortableHead label="Client" sortKey="client" activeKey={sortKey} direction={sortDir} onSort={onSort} />
               <SortableHead label="Type" sortKey="type" activeKey={sortKey} direction={sortDir} onSort={onSort} />
@@ -285,12 +286,13 @@ export function ContractsTable({
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filteredRows.map((row) => (
+            {filteredRows.map((row, index) => (
               <TableRow
                 key={row.id}
                 className="cursor-pointer"
                 onClick={() => setSelectedId(row.id)}
               >
+                <TableCell className="text-muted-foreground text-center">{index + 1}</TableCell>
                 <TableCell className="font-medium">{row.vehicleLabel}</TableCell>
                 <TableCell>{row.clientName}</TableCell>
                 <TableCell className="capitalize">{row.contract_type.replace(/_/g, " ")}</TableCell>
@@ -325,7 +327,7 @@ export function ContractsTable({
             ))}
             {filteredRows.length === 0 && (
               <TableRow>
-                <TableCell colSpan={8} className="text-muted-foreground text-center py-8">
+                <TableCell colSpan={9} className="text-muted-foreground text-center py-8">
                   No contracts match your filters.
                 </TableCell>
               </TableRow>
