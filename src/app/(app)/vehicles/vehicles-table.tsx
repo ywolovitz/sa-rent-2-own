@@ -506,27 +506,44 @@ export function VehiclesTable({
   exportedBy: string;
 }) {
   const [statusFilter, setStatusFilter] = useState<"all" | VehicleStatus>(initialStatus ?? "all");
-  const [serviceDueSoon, setServiceDueSoon] = useState(initialServiceDueSoon ?? false);
+  // Split from a single combined "due for service" filter into overdue vs.
+  // upcoming, since those call for different urgency when staff are
+  // triaging the fleet.
+  const [serviceOverdue, setServiceOverdue] = useState(false);
+  const [serviceUpcoming, setServiceUpcoming] = useState(initialServiceDueSoon ?? false);
   const [contractEndingSoon, setContractEndingSoon] = useState(initialContractEndingSoon ?? false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const captureRef = useRef<HTMLDivElement>(null);
 
-  // Status, "due for service", and "contract ending" are presented as one
-  // set of quick filters (the pill row, plus this dropdown and button), so
-  // picking one clears the others — combining them silently intersects to
-  // an empty, confusing result (e.g. Idle + Contract ending, when no idle
-  // vehicle's contract happens to be ending soon).
+  // Status, service overdue/upcoming, and "contract ending" are presented
+  // as one set of quick filters (the pill row, plus this dropdown and
+  // button), so picking one clears the others — combining them silently
+  // intersects to an empty, confusing result (e.g. Idle + Contract ending,
+  // when no idle vehicle's contract happens to be ending soon).
   function selectStatus(status: "all" | VehicleStatus) {
     setStatusFilter(status);
-    setServiceDueSoon(false);
+    setServiceOverdue(false);
+    setServiceUpcoming(false);
     setContractEndingSoon(false);
   }
-  function toggleServiceDueSoon() {
-    setServiceDueSoon((was) => {
+  function toggleServiceOverdue() {
+    setServiceOverdue((was) => {
       const next = !was;
       if (next) {
         setStatusFilter("all");
+        setServiceUpcoming(false);
+        setContractEndingSoon(false);
+      }
+      return next;
+    });
+  }
+  function toggleServiceUpcoming() {
+    setServiceUpcoming((was) => {
+      const next = !was;
+      if (next) {
+        setStatusFilter("all");
+        setServiceOverdue(false);
         setContractEndingSoon(false);
       }
       return next;
@@ -537,7 +554,8 @@ export function VehiclesTable({
       const next = !was;
       if (next) {
         setStatusFilter("all");
-        setServiceDueSoon(false);
+        setServiceOverdue(false);
+        setServiceUpcoming(false);
       }
       return next;
     });
@@ -652,6 +670,7 @@ export function VehiclesTable({
       ),
   };
 
+  const today = isoDaysFromNow(0);
   const serviceDueCutoff = isoDaysFromNow(30);
   const contractEndingCutoff = isoDaysFromNow(30);
 
@@ -662,13 +681,21 @@ export function VehiclesTable({
   const activeCount = rows.filter((r) => r.status === "on_road").length;
   const idleCount = rows.filter((r) => r.status === "parked").length;
   const workshopCount = rows.filter((r) => r.status === "in_repair").length;
-  const servicingDueSoonCount = rows.filter(
-    (r) => r.next_service_date && r.next_service_date <= serviceDueCutoff
+  const serviceOverdueCount = rows.filter(
+    (r) => r.next_service_date && r.next_service_date < today
+  ).length;
+  const serviceUpcomingCount = rows.filter(
+    (r) => r.next_service_date && r.next_service_date >= today && r.next_service_date <= serviceDueCutoff
   ).length;
 
   const preFiltered = rows
     .filter((r) => statusFilter === "all" || r.status === statusFilter)
-    .filter((r) => !serviceDueSoon || (r.next_service_date && r.next_service_date <= serviceDueCutoff))
+    .filter((r) => !serviceOverdue || (r.next_service_date && r.next_service_date < today))
+    .filter(
+      (r) =>
+        !serviceUpcoming ||
+        (r.next_service_date && r.next_service_date >= today && r.next_service_date <= serviceDueCutoff)
+    )
     .filter(
       (r) =>
         !contractEndingSoon ||
@@ -792,7 +819,8 @@ export function VehiclesTable({
       filterSummary: summarizeFilters([
         search && `Search: "${search}"`,
         statusFilter !== "all" && `Status: ${STATUS_LABELS[statusFilter]}`,
-        serviceDueSoon && "Due for service",
+        serviceOverdue && "Services overdue",
+        serviceUpcoming && "Upcoming services",
         contractEndingSoon && "Contract ending",
       ]),
       exportedBy,
@@ -810,7 +838,7 @@ export function VehiclesTable({
             label="Fleet"
             value={fleetCount}
             subtitle="Total vehicles"
-            isActive={statusFilter === "all" && !serviceDueSoon && !contractEndingSoon}
+            isActive={statusFilter === "all" && !serviceOverdue && !serviceUpcoming && !contractEndingSoon}
             onClick={() => selectStatus("all")}
           />
           <StatButtonPill
@@ -835,11 +863,18 @@ export function VehiclesTable({
             onClick={() => selectStatus("in_repair")}
           />
           <StatButtonPill
-            label="Servicing"
-            value={servicingDueSoonCount}
-            subtitle="Due within 30 days"
-            isActive={serviceDueSoon}
-            onClick={toggleServiceDueSoon}
+            label="Overdue"
+            value={serviceOverdueCount}
+            subtitle="Services overdue"
+            isActive={serviceOverdue}
+            onClick={toggleServiceOverdue}
+          />
+          <StatButtonPill
+            label="Upcoming"
+            value={serviceUpcomingCount}
+            subtitle="Upcoming services (next 30 days)"
+            isActive={serviceUpcoming}
+            onClick={toggleServiceUpcoming}
           />
           <StatLinkPill
             label="Contracts"
