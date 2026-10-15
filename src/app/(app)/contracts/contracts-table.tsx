@@ -262,7 +262,7 @@ export function ContractsTable({
         <Table containerClassName="overflow-x-visible">
           <TableHeader className="bg-background sticky top-0 z-10">
             <TableRow>
-              <TableHead className="text-muted-foreground sticky left-0 z-20 w-10 border-r bg-inherit text-center">
+              <TableHead className="text-muted-foreground sticky left-0 z-20 w-10 border-r bg-muted text-center">
                 #
               </TableHead>
               <SortableHead label="Vehicle" sortKey="vehicle" activeKey={sortKey} direction={sortDir} onSort={onSort} />
@@ -294,7 +294,7 @@ export function ContractsTable({
                 className="cursor-pointer"
                 onClick={() => setSelectedId(row.id)}
               >
-                <TableCell className="text-muted-foreground sticky left-0 z-10 border-r bg-inherit text-center">
+                <TableCell className="text-muted-foreground sticky left-0 z-10 border-r bg-background text-center group-hover:bg-muted group-data-[state=selected]:bg-muted">
                   {index + 1}
                 </TableCell>
                 <TableCell className="font-medium">{row.vehicleLabel}</TableCell>

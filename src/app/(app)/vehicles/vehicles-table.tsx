@@ -962,14 +962,14 @@ export function VehiclesTable({
           <Table containerClassName="overflow-x-visible">
             <TableHeader className="bg-background sticky top-0 z-10">
               <TableRow>
-                <TableHead className="sticky left-0 z-20 w-10 bg-inherit">
+                <TableHead className="sticky left-0 z-20 w-10 bg-muted">
                   <Checkbox
                     checked={allVisibleSelected ? true : someVisibleSelected ? "indeterminate" : false}
                     onCheckedChange={toggleSelectAllVisible}
                     aria-label="Select all visible rows"
                   />
                 </TableHead>
-                <TableHead className="text-muted-foreground sticky left-10 z-20 w-10 border-r bg-inherit text-center">
+                <TableHead className="text-muted-foreground sticky left-10 z-20 w-10 border-r bg-muted text-center">
                   #
                 </TableHead>
                 <SortableContext items={visibleColumns} strategy={horizontalListSortingStrategy}>
@@ -996,7 +996,7 @@ export function VehiclesTable({
                   onClick={() => canManage && setSelectedId(vehicle.id)}
                 >
                   <TableCell
-                    className="sticky left-0 z-10 bg-inherit"
+                    className="sticky left-0 z-10 bg-background group-hover:bg-muted group-data-[state=selected]:bg-muted"
                     onClick={(e) => e.stopPropagation()}
                   >
                     <Checkbox
@@ -1005,7 +1005,7 @@ export function VehiclesTable({
                       aria-label={`Select ${vehicle.current_plate ?? vehicle.file_no}`}
                     />
                   </TableCell>
-                  <TableCell className="text-muted-foreground sticky left-10 z-10 border-r bg-inherit text-center">
+                  <TableCell className="text-muted-foreground sticky left-10 z-10 border-r bg-background text-center group-hover:bg-muted group-data-[state=selected]:bg-muted">
                     {index + 1}
                   </TableCell>
                   {visibleColumns.map((column) => (
