@@ -962,15 +962,15 @@ export function VehiclesTable({
           <Table containerClassName="overflow-x-visible">
             <TableHeader className="bg-background sticky top-0 z-10">
               <TableRow>
-                <TableHead className="sticky left-0 z-20 w-10 bg-muted">
-                  <Checkbox
-                    checked={allVisibleSelected ? true : someVisibleSelected ? "indeterminate" : false}
-                    onCheckedChange={toggleSelectAllVisible}
-                    aria-label="Select all visible rows"
-                  />
-                </TableHead>
-                <TableHead className="text-muted-foreground sticky left-10 z-20 w-10 border-r bg-muted text-center">
-                  #
+                <TableHead className="sticky left-0 z-20 w-20 border-r bg-muted">
+                  <div className="flex items-center gap-2">
+                    <Checkbox
+                      checked={allVisibleSelected ? true : someVisibleSelected ? "indeterminate" : false}
+                      onCheckedChange={toggleSelectAllVisible}
+                      aria-label="Select all visible rows"
+                    />
+                    <span className="text-muted-foreground flex-1 text-center">#</span>
+                  </div>
                 </TableHead>
                 <SortableContext items={visibleColumns} strategy={horizontalListSortingStrategy}>
                   {visibleColumns.map((column) => (
@@ -995,18 +995,17 @@ export function VehiclesTable({
                   className={canManage ? "cursor-pointer" : undefined}
                   onClick={() => canManage && setSelectedId(vehicle.id)}
                 >
-                  <TableCell
-                    className="sticky left-0 z-10 bg-background group-hover:bg-muted group-data-[state=selected]:bg-muted"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <Checkbox
-                      checked={selectedIds.has(vehicle.id)}
-                      onCheckedChange={() => toggleRowSelected(vehicle.id)}
-                      aria-label={`Select ${vehicle.current_plate ?? vehicle.file_no}`}
-                    />
-                  </TableCell>
-                  <TableCell className="text-muted-foreground sticky left-10 z-10 border-r bg-background text-center group-hover:bg-muted group-data-[state=selected]:bg-muted">
-                    {index + 1}
+                  <TableCell className="sticky left-0 z-10 w-20 border-r bg-background group-hover:bg-muted group-data-[state=selected]:bg-muted">
+                    <div className="flex items-center gap-2">
+                      <span onClick={(e) => e.stopPropagation()}>
+                        <Checkbox
+                          checked={selectedIds.has(vehicle.id)}
+                          onCheckedChange={() => toggleRowSelected(vehicle.id)}
+                          aria-label={`Select ${vehicle.current_plate ?? vehicle.file_no}`}
+                        />
+                      </span>
+                      <span className="text-muted-foreground flex-1 text-center">{index + 1}</span>
+                    </div>
                   </TableCell>
                   {visibleColumns.map((column) => (
                     <TableCell key={column} className={column === "reg" ? "font-medium" : undefined}>
@@ -1045,7 +1044,7 @@ export function VehiclesTable({
               {filteredRows.length === 0 && (
                 <TableRow>
                   <TableCell
-                    colSpan={visibleColumns.length + (canManage ? 1 : 0) + 2}
+                    colSpan={visibleColumns.length + (canManage ? 1 : 0) + 1}
                     className="text-muted-foreground text-center py-8"
                   >
                     No vehicles match your filters.
