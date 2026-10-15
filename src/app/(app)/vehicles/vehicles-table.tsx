@@ -962,14 +962,16 @@ export function VehiclesTable({
           <Table containerClassName="overflow-x-visible">
             <TableHeader className="bg-background sticky top-0 z-10">
               <TableRow>
-                <TableHead className="w-10">
+                <TableHead className="sticky left-0 z-20 w-10 bg-inherit">
                   <Checkbox
                     checked={allVisibleSelected ? true : someVisibleSelected ? "indeterminate" : false}
                     onCheckedChange={toggleSelectAllVisible}
                     aria-label="Select all visible rows"
                   />
                 </TableHead>
-                <TableHead className="text-muted-foreground w-10 text-center">#</TableHead>
+                <TableHead className="text-muted-foreground sticky left-10 z-20 w-10 border-r bg-inherit text-center">
+                  #
+                </TableHead>
                 <SortableContext items={visibleColumns} strategy={horizontalListSortingStrategy}>
                   {visibleColumns.map((column) => (
                     <DraggableTableHead
@@ -993,14 +995,19 @@ export function VehiclesTable({
                   className={canManage ? "cursor-pointer" : undefined}
                   onClick={() => canManage && setSelectedId(vehicle.id)}
                 >
-                  <TableCell onClick={(e) => e.stopPropagation()}>
+                  <TableCell
+                    className="sticky left-0 z-10 bg-inherit"
+                    onClick={(e) => e.stopPropagation()}
+                  >
                     <Checkbox
                       checked={selectedIds.has(vehicle.id)}
                       onCheckedChange={() => toggleRowSelected(vehicle.id)}
                       aria-label={`Select ${vehicle.current_plate ?? vehicle.file_no}`}
                     />
                   </TableCell>
-                  <TableCell className="text-muted-foreground text-center">{index + 1}</TableCell>
+                  <TableCell className="text-muted-foreground sticky left-10 z-10 border-r bg-inherit text-center">
+                    {index + 1}
+                  </TableCell>
                   {visibleColumns.map((column) => (
                     <TableCell key={column} className={column === "reg" ? "font-medium" : undefined}>
                       {renderCell(column, vehicle)}

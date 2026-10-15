@@ -262,7 +262,9 @@ export function ContractsTable({
         <Table containerClassName="overflow-x-visible">
           <TableHeader className="bg-background sticky top-0 z-10">
             <TableRow>
-              <TableHead className="text-muted-foreground w-10 text-center">#</TableHead>
+              <TableHead className="text-muted-foreground sticky left-0 z-20 w-10 border-r bg-inherit text-center">
+                #
+              </TableHead>
               <SortableHead label="Vehicle" sortKey="vehicle" activeKey={sortKey} direction={sortDir} onSort={onSort} />
               <SortableHead label="Client" sortKey="client" activeKey={sortKey} direction={sortDir} onSort={onSort} />
               <SortableHead label="Type" sortKey="type" activeKey={sortKey} direction={sortDir} onSort={onSort} />
@@ -292,7 +294,9 @@ export function ContractsTable({
                 className="cursor-pointer"
                 onClick={() => setSelectedId(row.id)}
               >
-                <TableCell className="text-muted-foreground text-center">{index + 1}</TableCell>
+                <TableCell className="text-muted-foreground sticky left-0 z-10 border-r bg-inherit text-center">
+                  {index + 1}
+                </TableCell>
                 <TableCell className="font-medium">{row.vehicleLabel}</TableCell>
                 <TableCell>{row.clientName}</TableCell>
                 <TableCell className="capitalize">{row.contract_type.replace(/_/g, " ")}</TableCell>

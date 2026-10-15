@@ -137,7 +137,9 @@ export function ClientsTable({
         <Table containerClassName="overflow-x-visible">
           <TableHeader className="bg-background sticky top-0 z-10">
             <TableRow>
-              <TableHead className="text-muted-foreground w-10 text-center">#</TableHead>
+              <TableHead className="text-muted-foreground sticky left-0 z-20 w-10 border-r bg-inherit text-center">
+                #
+              </TableHead>
               <SortableHead label="Name" sortKey="name" activeKey={sortKey} direction={sortDir} onSort={onSort} />
               <SortableHead label="Cell number" sortKey="cell" activeKey={sortKey} direction={sortDir} onSort={onSort} />
               <SortableHead
@@ -158,7 +160,9 @@ export function ClientsTable({
                 className="cursor-pointer"
                 onClick={() => setSelectedId(client.id)}
               >
-                <TableCell className="text-muted-foreground text-center">{index + 1}</TableCell>
+                <TableCell className="text-muted-foreground sticky left-0 z-10 border-r bg-inherit text-center">
+                  {index + 1}
+                </TableCell>
                 <TableCell className="font-medium">{client.full_name}</TableCell>
                 <TableCell>{formatSaPhoneForDisplay(client.cell_number)}</TableCell>
                 <TableCell>{client.id_number ?? "—"}</TableCell>
