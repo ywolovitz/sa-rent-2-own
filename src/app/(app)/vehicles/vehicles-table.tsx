@@ -252,11 +252,23 @@ function ColourCell({
         <ColourChip name={current} />
       </SelectTrigger>
       <SelectContent onClick={(e) => e.stopPropagation()}>
-        {VEHICLE_COLOUR_OPTIONS.map((option) => (
-          <SelectItem key={option} value={option}>
-            {option}
-          </SelectItem>
-        ))}
+        {VEHICLE_COLOUR_OPTIONS.map((option) => {
+          const hex = resolveVehicleColourHex(option);
+          return (
+            <SelectItem key={option} value={option}>
+              <span className="flex items-center gap-2">
+                {hex && (
+                  <span
+                    aria-hidden="true"
+                    className="size-3 shrink-0 rounded-full border border-black/15"
+                    style={{ backgroundColor: hex }}
+                  />
+                )}
+                {option}
+              </span>
+            </SelectItem>
+          );
+        })}
       </SelectContent>
     </Select>
   );
