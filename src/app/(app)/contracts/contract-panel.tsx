@@ -26,6 +26,7 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import { Separator } from "@/components/ui/separator";
 import {
   Select,
   SelectContent,
@@ -48,6 +49,7 @@ import {
   type ContractFormValues,
 } from "./schema";
 import type { ContractWithDetails, SelectableClient, SelectableVehicle } from "./types";
+import { ContractVehicleHistorySection } from "./contract-vehicle-history-section";
 
 const CONTRACT_TYPE_LABELS: Record<(typeof contractTypeValues)[number], string> = {
   rent_to_own: "Rent-to-own",
@@ -194,9 +196,9 @@ export function ContractPanel({
         <SheetHeader>
           <SheetTitle>{isEditing ? "Edit contract" : "Add contract"}</SheetTitle>
         </SheetHeader>
-        <Form {...form}>
-          <form id="contract-form" onSubmit={form.handleSubmit(onSubmit)} className="contents">
-            <SheetBody>
+        <SheetBody>
+          <Form {...form}>
+            <form id="contract-form" onSubmit={form.handleSubmit(onSubmit)} className="contents">
             <section className="grid gap-4 sm:grid-cols-2">
               <h3 className="text-muted-foreground col-span-full text-xs font-semibold tracking-wide uppercase">
                 Deal
@@ -613,9 +615,16 @@ export function ContractPanel({
               )}
             />
 
-            </SheetBody>
-          </form>
-        </Form>
+            </form>
+          </Form>
+
+          {isEditing && (
+            <>
+              <Separator />
+              <ContractVehicleHistorySection contractId={contract!.id} />
+            </>
+          )}
+        </SheetBody>
         <SheetFooter>
           <Button type="submit" form="contract-form" disabled={isPending}>
             {isPending ? "Saving…" : "Save"}

@@ -45,6 +45,7 @@ import {
 } from "./schema";
 import type { VehicleWithRegistration } from "./types";
 import { VehicleCostsSection } from "./vehicle-costs-section";
+import { VehicleContractHistorySection } from "./vehicle-contract-history-section";
 
 const STATUS_LABELS: Record<(typeof vehicleStatusValues)[number], string> = {
   available: "Available",
@@ -494,6 +495,8 @@ export function VehiclePanel({
             <>
               <Separator />
               <VehicleCostsSection vehicleId={vehicle!.id} canManage={canManage} />
+              <Separator />
+              <VehicleContractHistorySection vehicleId={vehicle!.id} />
             </>
           )}
         </SheetBody>

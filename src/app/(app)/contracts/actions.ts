@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 
 import { createClient as createSupabaseServerClient } from "@/lib/supabase/server";
 import { requireManagerOrAdmin } from "@/lib/auth/require-role";
+import { syncVehicleAssignment } from "@/lib/vehicle-assignments";
 import { contractFormSchema, type ContractFormValues } from "./schema";
 
 export interface ActionResult {
@@ -113,11 +114,17 @@ export async function createContract(raw: ContractFormValues): Promise<ActionRes
 
   const supabase = await createSupabaseServerClient();
   const row = await toContractRow(supabase, values);
-  const { error } = await supabase.from("contracts").insert(row);
+  const { data: contract, error } = await supabase
+    .from("contracts")
+    .insert(row)
+    .select("id")
+    .single();
 
-  if (error) {
-    return { error: friendlyInsertError(error) };
+  if (error || !contract) {
+    return { error: friendlyInsertError(error ?? { message: "unknown" }) };
   }
+
+  await syncVehicleAssignment(supabase, contract.id, values.vehicleId, values.startDate);
 
   revalidatePath("/contracts");
   revalidatePath("/vehicles");
@@ -142,6 +149,13 @@ export async function updateContract(
   if (error) {
     return { error: friendlyInsertError(error) };
   }
+
+  await syncVehicleAssignment(
+    supabase,
+    contractId,
+    values.vehicleId,
+    new Date().toISOString().slice(0, 10)
+  );
 
   revalidatePath("/contracts");
   revalidatePath("/vehicles");

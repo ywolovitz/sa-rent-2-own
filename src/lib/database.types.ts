@@ -335,6 +335,30 @@ export interface Database {
         Update: Partial<Database["public"]["Tables"]["contracts"]["Insert"]>;
         Relationships: [];
       };
+      contract_vehicle_assignments: {
+        Row: {
+          id: string;
+          contract_id: string;
+          vehicle_id: string;
+          effective_from: string;
+          effective_to: string | null;
+          reason: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          contract_id: string;
+          vehicle_id: string;
+          effective_from?: string;
+          effective_to?: string | null;
+          reason?: string | null;
+          created_at?: string;
+        };
+        Update: Partial<
+          Database["public"]["Tables"]["contract_vehicle_assignments"]["Insert"]
+        >;
+        Relationships: [];
+      };
       rental_payment_periods: {
         Row: {
           id: string;

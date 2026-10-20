@@ -110,6 +110,14 @@ Schema lives in `supabase/migrations/`, applied in filename order. `src/lib/data
 - Constraint: at most one row per vehicle with `effective_to IS NULL`
 - Current-screen usage always joins to the open (`effective_to IS NULL`) row; historical plates remain queryable
 
+### `contract_vehicle_assignments` (vehicle ↔ contract history — same relationship, both directions)
+- `id`, `contract_id` fk → contracts, `vehicle_id` fk → vehicles
+- `effective_from` date, `effective_to` date (null = current), `reason`, `created_at`
+- Constraint: at most one open row per `contract_id`, and at most one open row per `vehicle_id` — "a vehicle belongs to one contract at a time"
+- Mirrors the `vehicle_registrations` pattern above, just linking two parents instead of one. `contracts.vehicle_id` remains the quick "current vehicle" pointer most of the app reads directly, kept in sync with this table's open row by `syncVehicleAssignment()` (`src/lib/vehicle-assignments.ts`), called from `createContract`/`updateContract`
+- Surfaced as a "Contract history" tab on the Vehicle panel and a "Vehicle history" tab on the Contract panel
+- Bootstrapped with one row per existing contract at migration time (its current vehicle, open-ended) — no deeper history assumed; older deal history can slot in later as additional closed rows with no schema change
+
 ### `vehicle_costs`
 - `id`, `vehicle_id` fk → vehicles
 - `cost_type` enum(`service`, `repair`, `car_wash`, `maintenance`, `other`)
