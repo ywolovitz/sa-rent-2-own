@@ -312,13 +312,12 @@ const takenTags = new Set(
     .filter((t) => !!t)
 );
 
-function assignTag(dealNumber, clientId) {
-  const curated = dealNumber ? tagByDealNumber.get(dealNumber) : undefined;
-  if (curated) {
-    takenTags.add(curated.toUpperCase());
-    return curated;
-  }
-  const base = extractSurnameTag(clientNameById.get(clientId));
+// The curated tag isn't guaranteed unique even within the bank batch
+// sample itself — the same tag legitimately gets reused across different
+// historical deals for the same surname in the client's old system (only
+// one was ever active at a time there), so it still needs the same
+// collision check/counter as an auto-generated tag, not a blind pass-through.
+function claimTag(base) {
   if (!takenTags.has(base)) {
     takenTags.add(base);
     return base;
@@ -328,6 +327,12 @@ function assignTag(dealNumber, clientId) {
   const tag = `${base}${n}`;
   takenTags.add(tag);
   return tag;
+}
+
+function assignTag(dealNumber, clientId) {
+  const curated = dealNumber ? tagByDealNumber.get(dealNumber) : undefined;
+  if (curated) return claimTag(curated.toUpperCase());
+  return claimTag(extractSurnameTag(clientNameById.get(clientId)));
 }
 
 const updates = [];
@@ -344,7 +349,10 @@ console.log(`\nMatched:   ${updates.length}`);
 console.log(`Unmatched: ${unmatched.length} (-> unmatched Excel)`);
 console.log(`Conflicts: ${conflicts.length} (-> conflicts Excel)`);
 
+const failedWrites = [];
+
 if (!DRY_RUN) {
+  let written = 0;
   for (const u of updates) {
     const { error } = await supabase
       .from("contracts")
@@ -352,9 +360,15 @@ if (!DRY_RUN) {
       .eq("id", u.contractId);
     if (error) {
       console.error(`Failed to update contract ${u.contractId} (deal ${u.dealNumber}):`, error.message);
+      failedWrites.push({ ...u.row, reason: `Write failed: ${error.message}` });
+    } else {
+      written++;
     }
   }
-  console.log(`\nWrote ${updates.length} contracts.`);
+  console.log(`\nWrote ${written} of ${updates.length} matched contracts.`);
+  if (failedWrites.length > 0) {
+    console.log(`${failedWrites.length} failed to write (-> failed-writes Excel) — re-run to retry them.`);
+  }
 } else {
   console.log("\n--dry-run — nothing written to the database.");
 }
@@ -380,8 +394,15 @@ async function writeReportExcel(path, title, rows) {
   console.log(`Wrote ${rows.length} rows to ${path}`);
 }
 
-if (unmatched.length > 0 || conflicts.length > 0) {
+if (unmatched.length > 0 || conflicts.length > 0 || failedWrites.length > 0) {
   mkdirSync(".import-reports", { recursive: true });
+}
+if (failedWrites.length > 0) {
+  await writeReportExcel(
+    ".import-reports/deal-number-backfill-failed-writes.xlsx",
+    "Matched, but the database write itself failed — re-run to retry",
+    failedWrites
+  );
 }
 if (unmatched.length > 0) {
   await writeReportExcel(
