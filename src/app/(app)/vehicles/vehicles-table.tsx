@@ -862,7 +862,25 @@ export function VehiclesTable({
     const count = selectedRows.length;
     let blob: Blob | null;
     try {
-      blob = await toBlob(captureRef.current, { backgroundColor: "#ffffff", pixelRatio: 2 });
+      // html-to-image sizes its output from the capture node's own
+      // scrollWidth/Height, but that div has no overflow style of its own
+      // (default "visible"), so its scrollWidth just reports its own box
+      // width rather than the wide <table> overflowing inside it — the
+      // table itself is what actually has the real content width.
+      const node = captureRef.current;
+      const table = node.querySelector("table");
+      const width = table?.scrollWidth ?? node.scrollWidth;
+      const height = table?.scrollHeight ?? node.scrollHeight;
+      blob = await toBlob(node, {
+        backgroundColor: "#ffffff",
+        pixelRatio: 2,
+        width,
+        height,
+        // Forces the cloned node itself to the real width as an inline
+        // style — without this, the clone can still reflow/wrap narrower
+        // than the live DOM, even with width/height set above.
+        style: { width: `${width}px`, minWidth: `${width}px` },
+      });
     } catch {
       toast.error("Couldn't create the image");
       return;
@@ -1157,7 +1175,7 @@ export function VehiclesTable({
           which stop some browsers from ever painting it) and clipped to
           nothing by a zero-height, overflow-hidden ancestor instead. */}
       <div style={{ height: 0, overflow: "hidden" }} aria-hidden="true">
-        <div ref={captureRef}>
+        <div ref={captureRef} style={{ width: "max-content" }}>
           <Table>
             <TableHeader>
               <TableRow>
