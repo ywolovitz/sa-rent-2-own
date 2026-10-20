@@ -22,18 +22,17 @@ export default async function ContractsPage({ searchParams }: PageProps<"/contra
 
   const supabase = await createSupabaseServerClient();
 
-  const [{ data: contracts }, { data: vehicles }, { data: clients }, { data: registrations }, { data: strDetails }] =
+  const [{ data: contracts }, { data: vehicles }, { data: clients }, { data: registrations }] =
     await Promise.all([
       supabase
         .from("contracts")
         .select(
-          "id, vehicle_id, client_id, contract_type, status, start_date, end_date, payment_method, installment_amount, purchase_price, potential_sale_price, sale_price, residual_value, total_collected, outstanding_balance, arrears_amount, is_paid_up, notes"
+          "id, vehicle_id, client_id, contract_type, status, start_date, end_date, payment_method, installment_amount, purchase_price, potential_sale_price, sale_price, residual_value, total_collected, outstanding_balance, arrears_amount, is_paid_up, notes, deal_number, statement_tag, billing_day, billing_direction, billing_frequency, billing_status"
         )
         .order("start_date", { ascending: false }),
       supabase.from("vehicles").select("id, file_no, make, model, year, status, next_service_date"),
       supabase.from("clients").select("id, full_name").order("full_name"),
       supabase.from("vehicle_registrations").select("vehicle_id, plate_number").is("effective_to", null),
-      supabase.from("str_deal_details").select("contract_id, billing_day, billing_direction, billing_frequency"),
     ]);
 
   const plateByVehicle = new Map((registrations ?? []).map((r) => [r.vehicle_id, r.plate_number]));
@@ -44,7 +43,6 @@ export default async function ContractsPage({ searchParams }: PageProps<"/contra
 
   const vehicleById = new Map((vehicles ?? []).map((v) => [v.id, v]));
   const clientById = new Map((clients ?? []).map((c) => [c.id, c.full_name]));
-  const strByContract = new Map((strDetails ?? []).map((s) => [s.contract_id, s]));
 
   const serviceDueCutoff = isoDaysFromNow(30);
   const vehicleStatFilters = {
@@ -76,7 +74,6 @@ export default async function ContractsPage({ searchParams }: PageProps<"/contra
       ...c,
       vehicleLabel: vehicle ? vehicleLabel(vehicle) : "Unknown vehicle",
       clientName: clientById.get(c.client_id) ?? "Unknown client",
-      str_deal_details: strByContract.get(c.id) ?? null,
     };
   });
 

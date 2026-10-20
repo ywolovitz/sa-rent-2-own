@@ -61,7 +61,7 @@ const STATUS_CHIP_COLORS: Record<ContractStatus, { fill: string; font?: string }
 
 const ARREARS_CHIP = { fill: "FFFF5252" };
 
-type SortKey = "vehicle" | "client" | "type" | "status" | "installment" | "arrears" | "endDate";
+type SortKey = "deal" | "vehicle" | "client" | "type" | "status" | "installment" | "arrears" | "endDate";
 
 export function ContractsTable({
   rows,
@@ -91,11 +91,14 @@ export function ContractsTable({
 
   const searchFn = useCallback(
     (row: ContractRow, query: string) =>
-      [row.vehicleLabel, row.clientName].some((value) => value.toLowerCase().includes(query)),
+      [row.vehicleLabel, row.clientName, row.deal_number ?? ""].some((value) =>
+        value.toLowerCase().includes(query)
+      ),
     []
   );
 
   const sortFns = {
+    deal: (a: ContractRow, b: ContractRow) => compareStrings(a.deal_number, b.deal_number),
     vehicle: (a: ContractRow, b: ContractRow) => compareStrings(a.vehicleLabel, b.vehicleLabel),
     client: (a: ContractRow, b: ContractRow) => compareStrings(a.clientName, b.clientName),
     type: (a: ContractRow, b: ContractRow) => compareStrings(a.contract_type, b.contract_type),
@@ -128,6 +131,7 @@ export function ContractsTable({
 
   function handleExport() {
     const columns: ExportColumn<ContractRow>[] = [
+      { header: "Deal number", value: (r) => r.deal_number ?? "" },
       { header: "Vehicle", value: (r) => r.vehicleLabel },
       { header: "Client", value: (r) => r.clientName },
       { header: "Type", value: (r) => TYPE_LABELS[r.contract_type] },
@@ -265,6 +269,7 @@ export function ContractsTable({
               <TableHead className="text-muted-foreground sticky left-0 z-20 w-10 border-r bg-muted text-center">
                 #
               </TableHead>
+              <SortableHead label="Deal number" sortKey="deal" activeKey={sortKey} direction={sortDir} onSort={onSort} />
               <SortableHead label="Vehicle" sortKey="vehicle" activeKey={sortKey} direction={sortDir} onSort={onSort} />
               <SortableHead label="Client" sortKey="client" activeKey={sortKey} direction={sortDir} onSort={onSort} />
               <SortableHead label="Type" sortKey="type" activeKey={sortKey} direction={sortDir} onSort={onSort} />
@@ -297,6 +302,7 @@ export function ContractsTable({
                 <TableCell className="text-muted-foreground sticky left-0 z-10 border-r bg-background text-center group-hover:bg-muted group-data-[state=selected]:bg-muted">
                   {index + 1}
                 </TableCell>
+                <TableCell>{row.deal_number ?? "—"}</TableCell>
                 <TableCell className="font-medium">{row.vehicleLabel}</TableCell>
                 <TableCell>{row.clientName}</TableCell>
                 <TableCell className="capitalize">{row.contract_type.replace(/_/g, " ")}</TableCell>
@@ -331,7 +337,7 @@ export function ContractsTable({
             ))}
             {filteredRows.length === 0 && (
               <TableRow>
-                <TableCell colSpan={9} className="text-muted-foreground text-center py-8">
+                <TableCell colSpan={10} className="text-muted-foreground text-center py-8">
                   No contracts match your filters.
                 </TableCell>
               </TableRow>

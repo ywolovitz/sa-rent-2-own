@@ -28,9 +28,10 @@ export type ContractStatus =
   | "cancelled"
   | "defaulted"
   | "repossessed";
-export type PaymentMethod = "eft" | "cash" | "other";
+export type PaymentMethod = "eft" | "cash" | "other" | "debit_order";
 export type BillingDirection = "advance" | "arrears";
 export type BillingFrequency = "weekly" | "monthly";
+export type BillingStatus = "active" | "paused" | "stopped";
 export type RentalPeriodStatus = "paid" | "owed" | "ended" | "upcoming";
 export type VehicleCostType =
   | "service"
@@ -294,6 +295,12 @@ export interface Database {
           arrears_amount: number;
           is_paid_up: boolean;
           notes: string | null;
+          deal_number: string | null;
+          statement_tag: string | null;
+          billing_day: number | null;
+          billing_direction: BillingDirection;
+          billing_frequency: BillingFrequency;
+          billing_status: BillingStatus;
           created_at: string;
           updated_at: string;
         };
@@ -316,32 +323,16 @@ export interface Database {
           arrears_amount?: number;
           is_paid_up?: boolean;
           notes?: string | null;
+          deal_number?: string | null;
+          statement_tag?: string | null;
+          billing_day?: number | null;
+          billing_direction?: BillingDirection;
+          billing_frequency?: BillingFrequency;
+          billing_status?: BillingStatus;
           created_at?: string;
           updated_at?: string;
         };
         Update: Partial<Database["public"]["Tables"]["contracts"]["Insert"]>;
-        Relationships: [];
-      };
-      str_deal_details: {
-        Row: {
-          contract_id: string;
-          billing_day: number;
-          billing_direction: BillingDirection;
-          billing_frequency: BillingFrequency;
-          created_at: string;
-          updated_at: string;
-        };
-        Insert: {
-          contract_id: string;
-          billing_day: number;
-          billing_direction?: BillingDirection;
-          billing_frequency?: BillingFrequency;
-          created_at?: string;
-          updated_at?: string;
-        };
-        Update: Partial<
-          Database["public"]["Tables"]["str_deal_details"]["Insert"]
-        >;
         Relationships: [];
       };
       rental_payment_periods: {
@@ -515,6 +506,7 @@ export interface Database {
       payment_method: PaymentMethod;
       billing_direction: BillingDirection;
       billing_frequency: BillingFrequency;
+      billing_status: BillingStatus;
       rental_period_status: RentalPeriodStatus;
       vehicle_cost_type: VehicleCostType;
       bank_account_type: BankAccountType;

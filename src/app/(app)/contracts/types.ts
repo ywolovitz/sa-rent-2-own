@@ -1,6 +1,7 @@
 import type {
   BillingDirection,
   BillingFrequency,
+  BillingStatus,
   ContractStatus,
   ContractType,
   PaymentMethod,
@@ -25,11 +26,12 @@ export interface ContractWithDetails {
   arrears_amount: number;
   is_paid_up: boolean;
   notes: string | null;
-  str_deal_details: {
-    billing_day: number;
-    billing_direction: BillingDirection;
-    billing_frequency: BillingFrequency;
-  } | null;
+  deal_number: string | null;
+  statement_tag: string | null;
+  billing_day: number | null;
+  billing_direction: BillingDirection;
+  billing_frequency: BillingFrequency;
+  billing_status: BillingStatus;
 }
 
 export interface ContractRow extends ContractWithDetails {

@@ -1,7 +1,7 @@
 "use client";
 
 import { useTransition } from "react";
-import { useForm, useWatch } from "react-hook-form";
+import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Plus } from "lucide-react";
 import { toast } from "sonner";
@@ -40,6 +40,7 @@ import { createContract, updateContract } from "./actions";
 import {
   billingDirectionValues,
   billingFrequencyValues,
+  billingStatusValues,
   contractFormSchema,
   contractStatusValues,
   contractTypeValues,
@@ -63,9 +64,16 @@ const STATUS_LABELS: Record<(typeof contractStatusValues)[number], string> = {
 };
 
 const PAYMENT_METHOD_LABELS: Record<(typeof paymentMethodValues)[number], string> = {
+  debit_order: "Debit order",
   eft: "EFT",
   cash: "Cash",
   other: "Other",
+};
+
+const BILLING_STATUS_LABELS: Record<(typeof billingStatusValues)[number], string> = {
+  active: "Active",
+  paused: "Paused",
+  stopped: "Stopped",
 };
 
 function toFormValues(contract?: ContractWithDetails): ContractFormValues {
@@ -76,9 +84,10 @@ function toFormValues(contract?: ContractWithDetails): ContractFormValues {
       contractType: "rent_to_own",
       status: "active",
       startDate: new Date().toISOString().slice(0, 10),
-      paymentMethod: "eft",
+      paymentMethod: "debit_order",
       billingDirection: "arrears",
       billingFrequency: "monthly",
+      billingStatus: "active",
     };
   }
 
@@ -100,9 +109,12 @@ function toFormValues(contract?: ContractWithDetails): ContractFormValues {
     arrearsAmount: contract.arrears_amount?.toString() ?? undefined,
     isPaidUp: contract.is_paid_up,
     notes: contract.notes ?? undefined,
-    billingDay: contract.str_deal_details?.billing_day.toString() ?? undefined,
-    billingDirection: contract.str_deal_details?.billing_direction ?? "arrears",
-    billingFrequency: contract.str_deal_details?.billing_frequency ?? "monthly",
+    dealNumber: contract.deal_number ?? undefined,
+    statementTag: contract.statement_tag ?? undefined,
+    billingDay: contract.billing_day?.toString() ?? undefined,
+    billingDirection: contract.billing_direction,
+    billingFrequency: contract.billing_frequency,
+    billingStatus: contract.billing_status,
   };
 }
 
@@ -127,8 +139,6 @@ export function ContractPanel({
     resolver: zodResolver(contractFormSchema),
     defaultValues: toFormValues(contract),
   });
-
-  const contractType = useWatch({ control: form.control, name: "contractType" });
 
   function onSubmit(values: ContractFormValues) {
     startTransition(async () => {
@@ -315,81 +325,133 @@ export function ContractPanel({
               />
             </section>
 
-            {contractType === "short_term_rental" && (
-              <section className="grid gap-4 sm:grid-cols-3">
-                <h3 className="text-muted-foreground col-span-full text-xs font-semibold tracking-wide uppercase">
-                  STR billing
-                </h3>
-                <FormField
-                  control={form.control}
-                  name="billingDay"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Billing day</FormLabel>
+            <section className="grid gap-4 sm:grid-cols-3">
+              <h3 className="text-muted-foreground col-span-full text-xs font-semibold tracking-wide uppercase">
+                Billing
+              </h3>
+              <FormField
+                control={form.control}
+                name="dealNumber"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Deal number</FormLabel>
+                    <FormControl>
+                      <Input placeholder="MAD..." {...field} value={field.value ?? ""} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="statementTag"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Statement tag</FormLabel>
+                    <FormControl>
+                      <Input
+                        placeholder="Auto-generated from surname if left blank"
+                        {...field}
+                        value={field.value ?? ""}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="billingStatus"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Debit order status</FormLabel>
+                    <Select value={field.value} onValueChange={field.onChange}>
                       <FormControl>
-                        <Input
-                          type="number"
-                          min={1}
-                          max={31}
-                          {...field}
-                          value={field.value ?? ""}
-                          onChange={(e) => field.onChange(e.target.value)}
-                        />
+                        <SelectTrigger className="w-full">
+                          <SelectValue />
+                        </SelectTrigger>
                       </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="billingDirection"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Direction</FormLabel>
-                      <Select value={field.value} onValueChange={field.onChange}>
-                        <FormControl>
-                          <SelectTrigger className="w-full">
-                            <SelectValue />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {billingDirectionValues.map((d) => (
-                            <SelectItem key={d} value={d}>
-                              {d === "advance" ? "Pays ahead" : "Pays in arrears"}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="billingFrequency"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Frequency</FormLabel>
-                      <Select value={field.value} onValueChange={field.onChange}>
-                        <FormControl>
-                          <SelectTrigger className="w-full">
-                            <SelectValue />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {billingFrequencyValues.map((f) => (
-                            <SelectItem key={f} value={f}>
-                              {f === "weekly" ? "Weekly" : "Monthly"}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </section>
-            )}
+                      <SelectContent>
+                        {billingStatusValues.map((s) => (
+                          <SelectItem key={s} value={s}>
+                            {BILLING_STATUS_LABELS[s]}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="billingDay"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Billing day</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="number"
+                        min={1}
+                        max={31}
+                        {...field}
+                        value={field.value ?? ""}
+                        onChange={(e) => field.onChange(e.target.value)}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="billingDirection"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Direction</FormLabel>
+                    <Select value={field.value} onValueChange={field.onChange}>
+                      <FormControl>
+                        <SelectTrigger className="w-full">
+                          <SelectValue />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {billingDirectionValues.map((d) => (
+                          <SelectItem key={d} value={d}>
+                            {d === "advance" ? "Pays ahead" : "Pays in arrears"}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="billingFrequency"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Frequency</FormLabel>
+                    <Select value={field.value} onValueChange={field.onChange}>
+                      <FormControl>
+                        <SelectTrigger className="w-full">
+                          <SelectValue />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {billingFrequencyValues.map((f) => (
+                          <SelectItem key={f} value={f}>
+                            {f === "weekly" ? "Weekly" : "Monthly"}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </section>
 
             <section className="grid gap-4 sm:grid-cols-3">
               <h3 className="text-muted-foreground col-span-full text-xs font-semibold tracking-wide uppercase">

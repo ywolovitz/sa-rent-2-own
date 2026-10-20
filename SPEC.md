@@ -122,19 +122,17 @@ Schema lives in `supabase/migrations/`, applied in filename order. `src/lib/data
 - `id`, `vehicle_id` fk → vehicles, `client_id` fk → clients
 - `contract_type` enum(`rent_to_own`, `short_term_rental`, `other`)
 - `start_date`, `end_date`, `status` enum(`active`, `completed`, `cancelled`, `defaulted`, `repossessed`)
-- `payment_method` enum(`eft`, `cash`, `other`)
+- `payment_method` enum(`debit_order`, `eft`, `cash`, `other`) — new contracts default to `debit_order`
 - `installment_amount`, `purchase_price`, `potential_sale_price`, `sale_price`, `residual_value`
 - `total_collected`, `outstanding_balance`, `arrears_amount` (simple manually-maintained numeric fields — not a full payment ledger, by design choice for v1)
 - `is_paid_up` boolean, `notes`
+- `deal_number` (text, unique where set) — the client's own "MAD..." deal reference, surfaced as its own Contracts table column
+- `statement_tag` (text, unique where set) — short per-deal label used in bank debit-order batch "statement description" fields (e.g. "NEL", "NEL2" on collision). Auto-generated from the client's surname with a collision counter when left blank on save; always manually editable per contract.
+- `billing_day` int (day of month payment is due, nullable), `billing_direction` enum(`advance`, `arrears`), `billing_frequency` enum(`weekly`, `monthly`) — generalized onto every contract (not just short-term rentals, since rent-to-own deals collect by debit order too)
+- `billing_status` enum(`active`, `paused`, `stopped`) — whether this contract's debit order is currently collected, independent of the contract's own `status`
 - timestamps
 - A vehicle's "current client" = the client on its `active` contract; "past clients" = clients on its `completed`/`cancelled` contracts. No denormalized client fields on `vehicles`.
-
-### `str_deal_details` (1:1 extension of `contracts` where `contract_type = short_term_rental`)
-- `contract_id` fk → contracts
-- `billing_day` int (day of month payment is due)
-- `billing_direction` enum(`advance`, `arrears`) — "pays ahead" vs "pays back"
-- `billing_frequency` enum(`weekly`, `monthly`)
-- Built into the Contract panel's form when `contract_type = short_term_rental`.
+- `deal_number`/`statement_tag` were backfilled onto existing contracts from the client's accounts export and a bank batch sample via `scripts/backfill-deal-numbers.mjs` (matches by vehicle registration, then file number; anything ambiguous or unmatched is written to an Excel review file instead of guessed at — see the script's own header comment for the full matching policy).
 
 ### `rental_payment_periods`, `insurance_claims`, `sale_listings`
 - Schema exists (generalized payment-period tracking, insurance claim records, for-sale listing details), migrated from the source workbook, but **no app UI reads or writes these yet**. They're reachable today only via direct SQL/Supabase dashboard. Candidates for a future module once the client prioritizes them.
@@ -229,3 +227,4 @@ Roughly in priority order, per the client's stated priorities:
 11. **PDF generation** — not yet started, no library chosen.
 12. **Staging environment** — currently one production Supabase project; consider a separate project for testing schema changes before they hit real data, if that becomes painful.
 13. **Further query collapsing via PostgREST embedded selects** — `vehicles/page.tsx` and `clients/page.tsx` now fetch all their tables in one `Promise.all` wave (registrations/contracts/clients are small tables fetched in full rather than filtered by the vehicles query's results first — same pattern `contracts/page.tsx` already used), down from 3 and 2 sequential waves respectively. A further step — PostgREST embedded-resource selects (e.g. `vehicles.select("*, vehicle_registrations(...), contracts(*, clients(...)))")`) — could fold these into literally one HTTP request instead of several run in parallel, but `database.types.ts`'s `Relationships` arrays are currently all empty (hand-maintained, never filled in), so Supabase's type inference can't check an embedded select's shape today. Lower priority now that the sequential-wave cost is gone.
+14. **Bank debit-order batch file generation** — not yet started; the underlying fields exist (`contracts.deal_number`/`statement_tag`/`billing_day`/`billing_direction`/`billing_frequency`/`billing_status`, `client_banking_details.bank_name`/`branch_code`/account number), but the actual file generator is blocked on the client's real batch-file spec (a sample was used only to identify which fields were needed). The company's own collection account/statement-label fields in that sample (account number, "silver trio trading t/a sarent2own", "SARENT2OWN") are constants, not per-record data — hold them as config when this is built, not as a DB table.

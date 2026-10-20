@@ -8,9 +8,10 @@ export const contractStatusValues = [
   "defaulted",
   "repossessed",
 ] as const;
-export const paymentMethodValues = ["eft", "cash", "other"] as const;
+export const paymentMethodValues = ["debit_order", "eft", "cash", "other"] as const;
 export const billingDirectionValues = ["advance", "arrears"] as const;
 export const billingFrequencyValues = ["weekly", "monthly"] as const;
+export const billingStatusValues = ["active", "paused", "stopped"] as const;
 
 export const contractFormSchema = z.object({
   vehicleId: z.string().min(1, "Select a vehicle"),
@@ -30,11 +31,12 @@ export const contractFormSchema = z.object({
   arrearsAmount: z.string().optional(),
   isPaidUp: z.boolean().optional(),
   notes: z.string().optional(),
-
-  // Only used when contractType === "short_term_rental"
+  dealNumber: z.string().optional(),
+  statementTag: z.string().optional(),
   billingDay: z.string().optional(),
   billingDirection: z.enum(billingDirectionValues).optional(),
   billingFrequency: z.enum(billingFrequencyValues).optional(),
+  billingStatus: z.enum(billingStatusValues).optional(),
 });
 
 export type ContractFormValues = z.infer<typeof contractFormSchema>;

@@ -94,6 +94,7 @@ const TRACKER_LABELS: Record<TrackerStatus, string> = {
 };
 
 const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
+  debit_order: "Debit order",
   eft: "EFT",
   cash: "Cash",
   other: "Other",
