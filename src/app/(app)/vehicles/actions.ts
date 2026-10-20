@@ -1,10 +1,13 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { z } from "zod";
 
 import { createClient } from "@/lib/supabase/server";
 import { requireManagerOrAdmin } from "@/lib/auth/require-role";
-import { vehicleFormSchema, type VehicleFormValues } from "./schema";
+import type { VehicleStatus } from "@/lib/database.types";
+import { VEHICLE_COLOUR_OPTIONS } from "@/lib/vehicle-colours";
+import { vehicleFormSchema, vehicleStatusValues, type VehicleFormValues } from "./schema";
 
 export interface ActionResult {
   error?: string;
@@ -117,6 +120,55 @@ export async function updateVehicle(
       effective_from: today,
       reason: current ? "Plate changed" : undefined,
     });
+  }
+
+  revalidatePath("/vehicles");
+  return {};
+}
+
+// Lightweight single-field updates for the Vehicles table's inline status/
+// colour editors — avoid routing through the full vehicleFormSchema, which
+// requires fields (plate number, etc.) the inline editors don't touch.
+
+export async function updateVehicleStatus(
+  vehicleId: string,
+  status: VehicleStatus
+): Promise<ActionResult> {
+  await requireManagerOrAdmin();
+  const parsed = z.enum(vehicleStatusValues).safeParse(status);
+  if (!parsed.success) {
+    return { error: "Invalid status" };
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("vehicles")
+    .update({ status: parsed.data })
+    .eq("id", vehicleId);
+
+  if (error) {
+    return { error: "Couldn't update status" };
+  }
+
+  revalidatePath("/vehicles");
+  return {};
+}
+
+export async function updateVehicleColour(vehicleId: string, colour: string): Promise<ActionResult> {
+  await requireManagerOrAdmin();
+  const parsed = z.enum(VEHICLE_COLOUR_OPTIONS as [string, ...string[]]).safeParse(colour);
+  if (!parsed.success) {
+    return { error: "Invalid colour" };
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("vehicles")
+    .update({ colour: parsed.data })
+    .eq("id", vehicleId);
+
+  if (error) {
+    return { error: "Couldn't update colour" };
   }
 
   revalidatePath("/vehicles");

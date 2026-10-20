@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useRef, useState, useTransition } from "react";
 import {
   DndContext,
   KeyboardSensor,
@@ -40,10 +40,16 @@ import { exportToExcel, summarizeFilters, type ExportColumn } from "@/lib/export
 import { useColumnOrder } from "@/lib/use-column-order";
 import { compareNumbers, compareStrings, useTableControls } from "@/lib/use-table-controls";
 import { formatSaPhoneForDisplay } from "@/lib/phone";
-import { readableTextColor, resolveVehicleColourHex, toArgb } from "@/lib/vehicle-colours";
+import {
+  VEHICLE_COLOUR_OPTIONS,
+  readableTextColor,
+  resolveVehicleColourHex,
+  toArgb,
+} from "@/lib/vehicle-colours";
 import type { PaymentMethod, TrackerStatus, VehicleStatus } from "@/lib/database.types";
 
 import { vehicleStatusValues } from "./schema";
+import { updateVehicleColour, updateVehicleStatus } from "./actions";
 import { DeleteVehicleButton } from "./delete-vehicle-button";
 import { VehiclePanel } from "./vehicle-panel";
 import type { VehicleWithRegistration } from "./types";
@@ -166,6 +172,93 @@ function ColourChip({ name }: { name: string | null }) {
     >
       {name}
     </Badge>
+  );
+}
+
+/** A compact, borderless Select styled to look like its trigger content
+ * (a Badge) rather than a form control, so it reads as the same chip the
+ * read-only cell renders, just clickable. */
+const INLINE_SELECT_TRIGGER_CLASS =
+  "h-auto w-fit gap-1 border-none bg-transparent p-0 shadow-none hover:opacity-80 focus-visible:ring-1 data-[state=open]:opacity-80 [&_svg]:size-3 [&_svg]:opacity-40";
+
+function StatusCell({
+  vehicle,
+  canManage,
+}: {
+  vehicle: VehicleWithRegistration;
+  canManage: boolean;
+}) {
+  const [isPending, startTransition] = useTransition();
+
+  if (!canManage) {
+    return <Badge variant={STATUS_VARIANT[vehicle.status]}>{STATUS_LABELS[vehicle.status]}</Badge>;
+  }
+
+  return (
+    <Select
+      value={vehicle.status}
+      disabled={isPending}
+      onValueChange={(value) => {
+        const status = value as VehicleStatus;
+        if (status === vehicle.status) return;
+        startTransition(async () => {
+          const result = await updateVehicleStatus(vehicle.id, status);
+          if (result.error) toast.error(result.error);
+        });
+      }}
+    >
+      <SelectTrigger size="sm" className={INLINE_SELECT_TRIGGER_CLASS} onClick={(e) => e.stopPropagation()}>
+        <Badge variant={STATUS_VARIANT[vehicle.status]}>{STATUS_LABELS[vehicle.status]}</Badge>
+      </SelectTrigger>
+      <SelectContent onClick={(e) => e.stopPropagation()}>
+        {vehicleStatusValues.map((status) => (
+          <SelectItem key={status} value={status}>
+            {STATUS_LABELS[status]}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+}
+
+function ColourCell({
+  vehicle,
+  canManage,
+}: {
+  vehicle: VehicleWithRegistration;
+  canManage: boolean;
+}) {
+  const [isPending, startTransition] = useTransition();
+
+  if (!canManage) {
+    return <ColourChip name={vehicle.colour} />;
+  }
+
+  const current = vehicle.colour;
+
+  return (
+    <Select
+      value={current ?? undefined}
+      disabled={isPending}
+      onValueChange={(value) => {
+        if (value === current) return;
+        startTransition(async () => {
+          const result = await updateVehicleColour(vehicle.id, value);
+          if (result.error) toast.error(result.error);
+        });
+      }}
+    >
+      <SelectTrigger size="sm" className={INLINE_SELECT_TRIGGER_CLASS} onClick={(e) => e.stopPropagation()}>
+        <ColourChip name={current} />
+      </SelectTrigger>
+      <SelectContent onClick={(e) => e.stopPropagation()}>
+        {VEHICLE_COLOUR_OPTIONS.map((option) => (
+          <SelectItem key={option} value={option}>
+            {option}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
   );
 }
 
@@ -340,7 +433,7 @@ const MANAGER_ONLY_COLUMNS = new Set<ColumnId>([
   "paidUp",
 ]);
 
-function renderCell(column: ColumnId, vehicle: VehicleWithRegistration) {
+function renderCell(column: ColumnId, vehicle: VehicleWithRegistration, canManage: boolean) {
   switch (column) {
     case "reg":
       return vehicle.current_plate ?? "—";
@@ -353,13 +446,13 @@ function renderCell(column: ColumnId, vehicle: VehicleWithRegistration) {
     case "year":
       return vehicle.year ?? "—";
     case "colour":
-      return <ColourChip name={vehicle.colour} />;
+      return <ColourCell vehicle={vehicle} canManage={canManage} />;
     case "vin":
       return vehicle.vin ?? "—";
     case "engineNumber":
       return vehicle.engine_number ?? "—";
     case "status":
-      return <Badge variant={STATUS_VARIANT[vehicle.status]}>{STATUS_LABELS[vehicle.status]}</Badge>;
+      return <StatusCell vehicle={vehicle} canManage={canManage} />;
     case "legacyStatusNote":
       return vehicle.legacy_status_note ?? "—";
     case "client":
@@ -990,33 +1083,24 @@ export function VehiclesTable({
             </TableHeader>
             <TableBody>
               {filteredRows.map((vehicle, index) => (
-                <TableRow
-                  key={vehicle.id}
-                  className={canManage ? "cursor-pointer" : undefined}
-                  onClick={() => canManage && setSelectedId(vehicle.id)}
-                >
+                <TableRow key={vehicle.id}>
                   <TableCell className="sticky left-0 z-10 w-20 border-r bg-background group-hover:bg-muted group-data-[state=selected]:bg-muted">
                     <div className="flex items-center gap-2">
-                      <span onClick={(e) => e.stopPropagation()}>
-                        <Checkbox
-                          checked={selectedIds.has(vehicle.id)}
-                          onCheckedChange={() => toggleRowSelected(vehicle.id)}
-                          aria-label={`Select ${vehicle.current_plate ?? vehicle.file_no}`}
-                        />
-                      </span>
+                      <Checkbox
+                        checked={selectedIds.has(vehicle.id)}
+                        onCheckedChange={() => toggleRowSelected(vehicle.id)}
+                        aria-label={`Select ${vehicle.current_plate ?? vehicle.file_no}`}
+                      />
                       <span className="text-muted-foreground flex-1 text-center">{index + 1}</span>
                     </div>
                   </TableCell>
                   {visibleColumns.map((column) => (
                     <TableCell key={column} className={column === "reg" ? "font-medium" : undefined}>
-                      {renderCell(column, vehicle)}
+                      {renderCell(column, vehicle, canManage)}
                     </TableCell>
                   ))}
                   {canManage && (
-                    <TableCell
-                      className="flex items-center justify-end gap-1"
-                      onClick={(e) => e.stopPropagation()}
-                    >
+                    <TableCell className="flex items-center justify-end gap-1">
                       <Button
                         type="button"
                         variant="ghost"
@@ -1075,7 +1159,7 @@ export function VehiclesTable({
                 <TableRow key={vehicle.id}>
                   {visibleColumns.map((column) => (
                     <TableCell key={column} className={column === "reg" ? "font-medium" : undefined}>
-                      {renderCell(column, vehicle)}
+                      {renderCell(column, vehicle, false)}
                     </TableCell>
                   ))}
                 </TableRow>

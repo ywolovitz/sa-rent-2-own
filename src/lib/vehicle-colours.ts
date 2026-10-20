@@ -32,6 +32,15 @@ const COLOUR_KEYWORDS: Array<[string[], string]> = [
   [["pink", "magenta"], "#D6568C"],
 ];
 
+function capitalize(word: string): string {
+  return word.charAt(0).toUpperCase() + word.slice(1);
+}
+
+/** Canonical colour names offered in the inline colour picker — the first
+ * (most specific) keyword from each COLOUR_KEYWORDS group above, capitalized.
+ * To add a new selectable colour, add a new [keywords, hex] entry above. */
+export const VEHICLE_COLOUR_OPTIONS: string[] = COLOUR_KEYWORDS.map(([keywords]) => capitalize(keywords[0]));
+
 /** Resolves a free-text colour name to a representative hex swatch, or null if unrecognized. */
 export function resolveVehicleColourHex(name: string): string | null {
   const normalized = name.toLowerCase();
