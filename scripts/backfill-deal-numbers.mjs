@@ -23,12 +23,21 @@
  *   2. If no plate match, normalize the file number and look for exactly
  *      one contract on a vehicle with that file number.
  *   3. Zero matches after both steps -> written to the "unmatched" Excel.
- *   4. More than one candidate contract (either step), or more than one
- *      deal row claiming the same contract, or the contract already has a
- *      *different* deal number set -> written to the "conflicts" Excel,
- *      nothing is imported for it.
- *   5. Exactly one candidate, uncontested -> deal_number (+ statement_tag)
- *      written to that contract.
+ *   4. More than one candidate *contract* for a single deal row -> written
+ *      to the "conflicts" Excel (genuinely can't tell which contract this
+ *      deal is about).
+ *   5. More than one deal row claiming the *same* contract (a vehicle's
+ *      file/reg gets reused across successive historical deals) -> if
+ *      exactly one of them has workstate "Deal signed and Vehicle
+ *      delivered to Customer", that's the live one: it's accepted, the
+ *      rest go to "unmatched" (not conflicts — there's nothing ambiguous
+ *      left once the live row is identified). If zero or more than one
+ *      claim to be delivered, all of them go to "conflicts" instead —
+ *      never guess between two live-looking rows.
+ *   6. The contract already has a *different* deal number set -> written
+ *      to the "conflicts" Excel, nothing is imported for it.
+ *   7. Exactly one accepted row, uncontested -> deal_number (+
+ *      statement_tag) written to that contract.
  *
  * --dry-run parses and matches everything, prints the summary, and writes
  * both Excel files, without writing anything to the database. Always run
@@ -197,10 +206,27 @@ for (const c of contracts ?? []) {
 }
 
 // ---------------------------------------------------------------------------
-// Match each deal row to at most one contract.
+// Match each deal row to at most one contract — two passes.
+//
+// Pass 1: find each row's candidate contract(s) by vehicle reg, then file
+// number. Zero -> unmatched. More than one -> conflict (genuinely can't
+// tell which contract this deal is about). Exactly one -> grouped by that
+// contract, since several deal rows commonly land on the same contract
+// (a vehicle's slot gets reused across successive historical deals).
+//
+// Pass 2: for a contract claimed by more than one deal row, the one whose
+// workstate is "Deal signed and Vehicle delivered to Customer" is the row
+// that's actually live right now — the others are past deals on that same
+// vehicle slot with nothing left to attach to. If exactly one row has that
+// workstate, accept it and move the rest to unmatched (not conflicts —
+// there's nothing ambiguous about them once the live one is identified).
+// If zero or more than one row claims to be delivered, it's still a real
+// conflict — never guess between two live-looking rows.
 // ---------------------------------------------------------------------------
 
-const matchedByContractId = new Map(); // contract id -> accepted deal row (before cross-row conflict check)
+const DELIVERED_WORKSTATE = "Deal signed and Vehicle delivered to Customer";
+
+const rowsByContractId = new Map(); // contract id -> { contract, rows: [{row, matchedVia}] }
 const unmatched = [];
 const conflicts = [];
 
@@ -225,25 +251,53 @@ for (const row of accountRows) {
   }
 
   const contract = candidates[0];
-  if (contract.deal_number && normalizeDealNumber(contract.deal_number) !== row.dealNumber) {
+  if (!rowsByContractId.has(contract.id)) {
+    rowsByContractId.set(contract.id, { contract, rows: [] });
+  }
+  rowsByContractId.get(contract.id).rows.push({ row, matchedVia });
+}
+
+const matchedByContractId = new Map(); // contract id -> accepted deal row
+
+for (const { contract, rows } of rowsByContractId.values()) {
+  let accepted;
+  let rest = [];
+
+  if (rows.length === 1) {
+    accepted = rows[0];
+  } else {
+    const delivered = rows.filter(({ row }) => row.workstate === DELIVERED_WORKSTATE);
+    if (delivered.length === 1) {
+      accepted = delivered[0];
+      rest = rows.filter((r) => r !== accepted);
+    } else {
+      const reason =
+        delivered.length === 0
+          ? `${rows.length} deal rows matched the same contract, none show as currently delivered`
+          : `${delivered.length} deal rows matched the same contract and all show as currently delivered`;
+      for (const { row } of rows) conflicts.push({ ...row, reason });
+      continue;
+    }
+  }
+
+  if (contract.deal_number && normalizeDealNumber(contract.deal_number) !== accepted.row.dealNumber) {
     conflicts.push({
-      ...row,
+      ...accepted.row,
       reason: `Contract already has a different deal number (${contract.deal_number})`,
     });
+    for (const { row } of rest) {
+      unmatched.push({ ...row, reason: `Vehicle's current contract is already deal ${contract.deal_number}` });
+    }
     continue;
   }
 
-  if (matchedByContractId.has(contract.id)) {
-    // Another deal row already claimed this same contract — both are
-    // unresolvable, move the earlier one to conflicts too.
-    const earlier = matchedByContractId.get(contract.id);
-    conflicts.push({ ...earlier.row, reason: "Multiple deal rows matched the same contract" });
-    conflicts.push({ ...row, reason: "Multiple deal rows matched the same contract" });
-    matchedByContractId.delete(contract.id);
-    continue;
+  matchedByContractId.set(contract.id, { row: accepted.row, contract, matchedVia: accepted.matchedVia });
+  for (const { row } of rest) {
+    unmatched.push({
+      ...row,
+      reason: `Vehicle later moved to deal ${accepted.row.dealNumberRaw} (currently on this contract)`,
+    });
   }
-
-  matchedByContractId.set(contract.id, { row, contract, matchedVia });
 }
 
 // ---------------------------------------------------------------------------
