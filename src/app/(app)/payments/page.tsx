@@ -28,26 +28,53 @@ interface TransactionRow {
   reversed_transaction_id: string | null;
 }
 
+const TRANSACTION_SELECT =
+  "id, contract_id, transaction_date, type, reference, invoice_reference, cash_effect, reversed_transaction_id";
+
 /** PostgREST caps an unpaginated select at 1000 rows by default — with
  * 3,600+ transactions and counting, a plain .select() here silently
  * dropped everything after the 1000th row (ordered oldest-first, so the
  * UI looked like history just stopped in late 2024). Page through with
- * .range() instead of trusting a single request to return everything. */
+ * .range() instead of trusting a single request to return everything.
+ *
+ * Ordering by transaction_date alone isn't a *stable* sort — many rows
+ * share the same date (a batch run's receipts), so Postgres doesn't
+ * guarantee the same relative order for tied rows across two separate
+ * requests. Without a unique tiebreaker, that let the same row land in
+ * two different pages (seen as a duplicate React key on id) while
+ * another row could just as easily have been skipped between pages.
+ * Ordering by (transaction_date, id) makes every page's boundary
+ * deterministic, so pages never overlap or gap.
+ *
+ * The count is fetched first so every page can be requested in
+ * parallel instead of awaited one at a time — four sequential
+ * round trips was a real chunk of this page's load time.
+ */
 async function fetchAllTransactions(
   supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>
 ): Promise<TransactionRow[]> {
+  const { count } = await supabase
+    .from("payment_transactions")
+    .select("id", { count: "exact", head: true });
+  const total = count ?? 0;
+  if (total === 0) return [];
+
+  const pageCount = Math.ceil(total / PAGE_SIZE);
+  const pages = await Promise.all(
+    Array.from({ length: pageCount }, (_, i) =>
+      supabase
+        .from("payment_transactions")
+        .select(TRANSACTION_SELECT)
+        .order("transaction_date", { ascending: true })
+        .order("id", { ascending: true })
+        .range(i * PAGE_SIZE, i * PAGE_SIZE + PAGE_SIZE - 1)
+    )
+  );
+
   const all: TransactionRow[] = [];
-  let from = 0;
-  for (;;) {
-    const { data, error } = await supabase
-      .from("payment_transactions")
-      .select("id, contract_id, transaction_date, type, reference, invoice_reference, cash_effect, reversed_transaction_id")
-      .order("transaction_date", { ascending: true })
-      .range(from, from + PAGE_SIZE - 1);
-    if (error || !data || data.length === 0) break;
+  for (const { data, error } of pages) {
+    if (error || !data) continue;
     all.push(...data);
-    if (data.length < PAGE_SIZE) break;
-    from += PAGE_SIZE;
   }
   return all;
 }
