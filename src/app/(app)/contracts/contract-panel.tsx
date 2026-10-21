@@ -50,6 +50,7 @@ import {
 } from "./schema";
 import type { ContractWithDetails, SelectableClient, SelectableVehicle } from "./types";
 import { ContractVehicleHistorySection } from "./contract-vehicle-history-section";
+import { ContractPaymentHistorySection } from "./contract-payment-history-section";
 
 const CONTRACT_TYPE_LABELS: Record<(typeof contractTypeValues)[number], string> = {
   rent_to_own: "Rent-to-own",
@@ -622,6 +623,8 @@ export function ContractPanel({
             <>
               <Separator />
               <ContractVehicleHistorySection contractId={contract!.id} />
+              <Separator />
+              <ContractPaymentHistorySection contractId={contract!.id} />
             </>
           )}
         </SheetBody>
