@@ -6,12 +6,19 @@ import { PaymentsStatsCards } from "./stats-cards";
 import { MonthlyCollectionsChartClient } from "./monthly-collections-chart-client";
 import { PaymentsTable } from "./payments-table";
 import { MonthlyReportTable } from "./monthly-report-table";
-import type { ContractMonthlyReportRow, ContractPaymentSummaryRow, MonthlyCollectedDatum } from "./types";
+import { TransactionsTable } from "./transactions-table";
+import type {
+  ContractMonthlyReportRow,
+  ContractPaymentSummaryRow,
+  MonthlyCollectedDatum,
+  PaymentTransactionRow,
+} from "./types";
 
 export function PaymentsViewSwitcher({
   reportRows,
   monthLabels,
   summaryRows,
+  transactionRows,
   monthlyData,
   netCollected,
   lastMonthLabel,
@@ -23,6 +30,7 @@ export function PaymentsViewSwitcher({
   reportRows: ContractMonthlyReportRow[];
   monthLabels: string[];
   summaryRows: ContractPaymentSummaryRow[];
+  transactionRows: PaymentTransactionRow[];
   monthlyData: MonthlyCollectedDatum[];
   netCollected: number;
   lastMonthLabel: string | null;
@@ -36,6 +44,7 @@ export function PaymentsViewSwitcher({
       <TabsList>
         <TabsTrigger value="report">Report</TabsTrigger>
         <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
+        <TabsTrigger value="transactions">Transactions</TabsTrigger>
       </TabsList>
 
       <TabsContent value="report" className="flex min-h-0 flex-1 flex-col">
@@ -59,6 +68,10 @@ export function PaymentsViewSwitcher({
         </div>
 
         <PaymentsTable rows={summaryRows} />
+      </TabsContent>
+
+      <TabsContent value="transactions" className="flex min-h-0 flex-1 flex-col">
+        <TransactionsTable rows={transactionRows} exportedBy={exportedBy} />
       </TabsContent>
     </Tabs>
   );

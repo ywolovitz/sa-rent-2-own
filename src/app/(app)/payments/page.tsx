@@ -10,6 +10,7 @@ import type {
   ContractPaymentSummaryRow,
   MonthlyCollectedDatum,
   MonthlyReportCell,
+  PaymentTransactionRow,
 } from "./types";
 
 const MONTHS_SHOWN = 12;
@@ -17,10 +18,14 @@ const MONTH_LABEL = new Intl.DateTimeFormat("en-ZA", { month: "short", year: "nu
 const PAGE_SIZE = 1000;
 
 interface TransactionRow {
+  id: string;
   contract_id: string;
   transaction_date: string;
   type: PaymentTransactionType;
+  reference: string;
+  invoice_reference: string;
   cash_effect: number;
+  reversed_transaction_id: string | null;
 }
 
 /** PostgREST caps an unpaginated select at 1000 rows by default — with
@@ -36,7 +41,7 @@ async function fetchAllTransactions(
   for (;;) {
     const { data, error } = await supabase
       .from("payment_transactions")
-      .select("contract_id, transaction_date, type, cash_effect")
+      .select("id, contract_id, transaction_date, type, reference, invoice_reference, cash_effect, reversed_transaction_id")
       .order("transaction_date", { ascending: true })
       .range(from, from + PAGE_SIZE - 1);
     if (error || !data || data.length === 0) break;
@@ -185,6 +190,21 @@ export default async function PaymentsPage() {
 
   const monthLabels = windowKeys.map((key) => MONTH_LABEL.format(new Date(`${key}-01T00:00:00Z`)));
 
+  // Most-recent-first, individual-transaction view — the flat ledger
+  // underneath the per-contract rollups above.
+  const transactionRows: PaymentTransactionRow[] = [...transactions].reverse().map((t) => ({
+    id: t.id,
+    transactionDate: t.transaction_date,
+    dealNumber: dealNumberByContract.get(t.contract_id) ?? null,
+    clientName: clientNameById.get(clientIdByContract.get(t.contract_id) ?? "") ?? "Unknown client",
+    reg: plateByVehicle.get(vehicleIdByContract.get(t.contract_id) ?? "") ?? null,
+    type: t.type,
+    reference: t.reference,
+    invoiceReference: t.invoice_reference,
+    cashEffect: t.cash_effect,
+    reversed: t.reversed_transaction_id !== null,
+  }));
+
   return (
     <div className="flex h-full min-h-0 flex-col gap-4">
       <div>
@@ -198,6 +218,7 @@ export default async function PaymentsPage() {
         reportRows={reportRows}
         monthLabels={monthLabels}
         summaryRows={summaryRows}
+        transactionRows={transactionRows}
         monthlyData={monthlyData}
         netCollected={netCollected}
         lastMonthLabel={lastMonthLabel}

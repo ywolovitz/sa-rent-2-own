@@ -37,3 +37,19 @@ export interface ContractMonthlyReportRow {
   months: MonthlyReportCell[];
   missedCount: number;
 }
+
+export interface PaymentTransactionRow {
+  id: string;
+  transactionDate: string;
+  dealNumber: string | null;
+  clientName: string;
+  reg: string | null;
+  type: "receipt" | "debit_note";
+  reference: string;
+  invoiceReference: string;
+  cashEffect: number;
+  /** This row is linked (either direction) to a reversal pair — a receipt
+   * with reversed=true bounced; a debit_note always has reversed=true by
+   * definition (it IS a reversal). */
+  reversed: boolean;
+}
