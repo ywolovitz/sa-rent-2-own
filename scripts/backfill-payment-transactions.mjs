@@ -231,26 +231,36 @@ const failedWrites = [];
 if (!DRY_RUN) {
   const BATCH_SIZE = 500;
   let written = 0;
+  // Built from each batch's own upsert response — not a separate re-query,
+  // which would silently cap at PostgREST's default row limit (bit us on
+  // the first run: only 360 of 1204 links resolved with 3610 rows written).
+  const idByRefInvoice = new Map();
   for (let i = 0; i < matchedRows.length; i += BATCH_SIZE) {
     const batch = matchedRows.slice(i, i + BATCH_SIZE);
-    const { error } = await supabase.from("payment_transactions").upsert(
-      batch.map((r) => ({
-        contract_id: r.contractId,
-        transaction_date: r.transactionDate,
-        type: r.type,
-        reference: r.reference,
-        invoice_reference: r.invoiceReference,
-        amount: r.amount,
-        cash_effect: r.cashEffect,
-        reversal_reference: r.reversalReference,
-      })),
-      { onConflict: "reference,invoice_reference" }
-    );
+    const { data, error } = await supabase
+      .from("payment_transactions")
+      .upsert(
+        batch.map((r) => ({
+          contract_id: r.contractId,
+          transaction_date: r.transactionDate,
+          type: r.type,
+          reference: r.reference,
+          invoice_reference: r.invoiceReference,
+          amount: r.amount,
+          cash_effect: r.cashEffect,
+          reversal_reference: r.reversalReference,
+        })),
+        { onConflict: "reference,invoice_reference" }
+      )
+      .select("id, reference, invoice_reference");
     if (error) {
       console.error(`Failed to write batch ${i}-${i + batch.length}:`, error.message);
       failedWrites.push(...batch.map((r) => ({ ...r, reason: `Write failed: ${error.message}` })));
     } else {
       written += batch.length;
+      for (const t of data ?? []) {
+        idByRefInvoice.set(`${t.reference}||${t.invoice_reference}`, t.id);
+      }
     }
   }
   console.log(`\nWrote ${written} of ${matchedRows.length} payment transactions.`);
@@ -258,39 +268,27 @@ if (!DRY_RUN) {
     console.log(`${failedWrites.length} failed to write (-> failed-writes Excel) — re-run to retry them.`);
   }
 
-  // Pass 2: resolve reversal links.
+  // Pass 2: resolve reversal links using the ids captured above.
   const toResolve = matchedRows.filter((r) => r.reversalReference);
   console.log(`\nResolving ${toResolve.length} reversal links...`);
 
-  const { data: written_, error: fetchError } = await supabase
-    .from("payment_transactions")
-    .select("id, reference, invoice_reference")
-    .in(
-      "contract_id",
-      [...new Set(matchedRows.map((r) => r.contractId))]
-    );
-  if (fetchError) {
-    console.error("Failed to fetch written rows for reversal linking:", fetchError.message);
-  } else {
-    const idByRefInvoice = new Map((written_ ?? []).map((t) => [`${t.reference}||${t.invoice_reference}`, t.id]));
-    let linked = 0;
-    let linkFailed = 0;
-    for (const r of toResolve) {
-      const selfId = idByRefInvoice.get(`${r.reference}||${r.invoiceReference}`);
-      const targetId = idByRefInvoice.get(`${r.reversalReference}||${r.invoiceReference}`);
-      if (!selfId || !targetId) continue; // target wasn't matched/written — leave reversal_reference as the only record
-      const { error } = await supabase
-        .from("payment_transactions")
-        .update({ reversed_transaction_id: targetId })
-        .eq("id", selfId);
-      if (error) {
-        linkFailed++;
-      } else {
-        linked++;
-      }
+  let linked = 0;
+  let linkFailed = 0;
+  for (const r of toResolve) {
+    const selfId = idByRefInvoice.get(`${r.reference}||${r.invoiceReference}`);
+    const targetId = idByRefInvoice.get(`${r.reversalReference}||${r.invoiceReference}`);
+    if (!selfId || !targetId) continue; // target wasn't matched/written — leave reversal_reference as the only record
+    const { error } = await supabase
+      .from("payment_transactions")
+      .update({ reversed_transaction_id: targetId })
+      .eq("id", selfId);
+    if (error) {
+      linkFailed++;
+    } else {
+      linked++;
     }
-    console.log(`Linked ${linked} reversal pairs.${linkFailed > 0 ? ` ${linkFailed} link updates failed.` : ""}`);
   }
+  console.log(`Linked ${linked} reversal pairs.${linkFailed > 0 ? ` ${linkFailed} link updates failed.` : ""}`);
 } else {
   console.log("\n--dry-run — nothing written to the database.");
 }
