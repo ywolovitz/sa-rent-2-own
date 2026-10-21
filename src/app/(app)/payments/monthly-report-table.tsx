@@ -225,7 +225,7 @@ export function MonthlyReportTable({
       </div>
 
       <div className="min-h-0 flex-1 overflow-auto rounded-md border">
-        <Table>
+        <Table containerClassName="overflow-x-visible">
           <TableHeader className="bg-background sticky top-0 z-10">
             <TableRow>
               <SortableHead label="Deal number" sortKey="deal" activeKey={sortKey} direction={sortDir} onSort={onSort} />
