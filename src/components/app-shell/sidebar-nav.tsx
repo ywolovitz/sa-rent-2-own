@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Car, LayoutDashboard, Users, FileText, ShieldCheck } from "lucide-react";
+import { Car, LayoutDashboard, Users, FileText, Receipt, ShieldCheck } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import type { UserRole } from "@/lib/database.types";
@@ -12,6 +12,7 @@ const NAV_ITEMS = [
   { href: "/vehicles", label: "Vehicles", icon: Car, roles: ["admin", "manager", "technician"] },
   { href: "/clients", label: "Clients", icon: Users, roles: ["admin", "manager"] },
   { href: "/contracts", label: "Contracts", icon: FileText, roles: ["admin", "manager"] },
+  { href: "/payments", label: "Payments", icon: Receipt, roles: ["admin", "manager"] },
   { href: "/admin/users", label: "Staff", icon: ShieldCheck, roles: ["admin"] },
 ] as const;
 
