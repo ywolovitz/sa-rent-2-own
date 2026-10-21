@@ -33,11 +33,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 
 import { createClient, revealBankingDetails, updateClient } from "./actions";
 import { bankAccountTypeValues, clientFormSchema, type ClientFormValues } from "./schema";
 import type { ClientWithBanking } from "./types";
+import { ClientContractsSection } from "./client-contracts-section";
 
 const ACCOUNT_TYPE_LABELS: Record<(typeof bankAccountTypeValues)[number], string> = {
   cheque: "Cheque / current",
@@ -357,6 +359,13 @@ export function ClientPanel({
                 )}
               />
             </section>
+
+            {isEditing && (
+              <>
+                <Separator />
+                <ClientContractsSection clientId={client!.id} />
+              </>
+            )}
 
             </SheetBody>
           </form>
