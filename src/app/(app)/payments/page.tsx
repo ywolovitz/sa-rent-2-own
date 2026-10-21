@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 
 import { createClient as createSupabaseServerClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/auth/current-profile";
+import type { PaymentTransactionType } from "@/lib/database.types";
 
 import { PaymentsViewSwitcher } from "./view-switcher";
 import type {
@@ -13,6 +14,38 @@ import type {
 
 const MONTHS_SHOWN = 12;
 const MONTH_LABEL = new Intl.DateTimeFormat("en-ZA", { month: "short", year: "numeric" });
+const PAGE_SIZE = 1000;
+
+interface TransactionRow {
+  contract_id: string;
+  transaction_date: string;
+  type: PaymentTransactionType;
+  cash_effect: number;
+}
+
+/** PostgREST caps an unpaginated select at 1000 rows by default — with
+ * 3,600+ transactions and counting, a plain .select() here silently
+ * dropped everything after the 1000th row (ordered oldest-first, so the
+ * UI looked like history just stopped in late 2024). Page through with
+ * .range() instead of trusting a single request to return everything. */
+async function fetchAllTransactions(
+  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>
+): Promise<TransactionRow[]> {
+  const all: TransactionRow[] = [];
+  let from = 0;
+  for (;;) {
+    const { data, error } = await supabase
+      .from("payment_transactions")
+      .select("contract_id, transaction_date, type, cash_effect")
+      .order("transaction_date", { ascending: true })
+      .range(from, from + PAGE_SIZE - 1);
+    if (error || !data || data.length === 0) break;
+    all.push(...data);
+    if (data.length < PAGE_SIZE) break;
+    from += PAGE_SIZE;
+  }
+  return all;
+}
 
 function monthKey(dateStr: string): string {
   return dateStr.slice(0, 7); // "YYYY-MM"
@@ -33,16 +66,12 @@ export default async function PaymentsPage() {
 
   const supabase = await createSupabaseServerClient();
 
-  const [{ data: transactions }, { data: contracts }, { data: clients }, { data: registrations }] =
-    await Promise.all([
-      supabase
-        .from("payment_transactions")
-        .select("contract_id, transaction_date, type, cash_effect")
-        .order("transaction_date", { ascending: true }),
-      supabase.from("contracts").select("id, deal_number, client_id, vehicle_id, payment_method"),
-      supabase.from("clients").select("id, full_name"),
-      supabase.from("vehicle_registrations").select("vehicle_id, plate_number").is("effective_to", null),
-    ]);
+  const [transactions, { data: contracts }, { data: clients }, { data: registrations }] = await Promise.all([
+    fetchAllTransactions(supabase),
+    supabase.from("contracts").select("id, deal_number, client_id, vehicle_id, payment_method"),
+    supabase.from("clients").select("id, full_name"),
+    supabase.from("vehicle_registrations").select("vehicle_id, plate_number").is("effective_to", null),
+  ]);
 
   const dealNumberByContract = new Map((contracts ?? []).map((c) => [c.id, c.deal_number]));
   const clientIdByContract = new Map((contracts ?? []).map((c) => [c.id, c.client_id]));
@@ -62,7 +91,7 @@ export default async function PaymentsPage() {
   const monthlyByContract = new Map<string, Map<string, number>>();
   const firstMonthByContract = new Map<string, string>();
 
-  for (const t of transactions ?? []) {
+  for (const t of transactions) {
     const existing = byContract.get(t.contract_id) ?? {
       netCollected: 0,
       reversalCount: 0,
