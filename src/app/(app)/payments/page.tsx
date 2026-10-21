@@ -46,36 +46,46 @@ const TRANSACTION_SELECT =
  * Ordering by (transaction_date, id) makes every page's boundary
  * deterministic, so pages never overlap or gap.
  *
- * The count is fetched first so every page can be requested in
- * parallel instead of awaited one at a time — four sequential
- * round trips was a real chunk of this page's load time.
+ * Pages are fired in parallel waves rather than awaited one at a time —
+ * a separate upfront count query would add a full extra round trip to
+ * the critical path before any real data could even start loading, and
+ * sequential .range() awaits were the bigger cost before that. A wave
+ * covers comfortably more than today's ~3,600 rows, so in practice this
+ * resolves in a single wave; it only reaches for a second wave once the
+ * ledger actually grows past that.
  */
 async function fetchAllTransactions(
   supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>
 ): Promise<TransactionRow[]> {
-  const { count } = await supabase
-    .from("payment_transactions")
-    .select("id", { count: "exact", head: true });
-  const total = count ?? 0;
-  if (total === 0) return [];
-
-  const pageCount = Math.ceil(total / PAGE_SIZE);
-  const pages = await Promise.all(
-    Array.from({ length: pageCount }, (_, i) =>
-      supabase
-        .from("payment_transactions")
-        .select(TRANSACTION_SELECT)
-        .order("transaction_date", { ascending: true })
-        .order("id", { ascending: true })
-        .range(i * PAGE_SIZE, i * PAGE_SIZE + PAGE_SIZE - 1)
-    )
-  );
-
+  const WAVE_SIZE = 5; // 5,000 rows of headroom per wave
   const all: TransactionRow[] = [];
-  for (const { data, error } of pages) {
-    if (error || !data) continue;
-    all.push(...data);
+  let pageIndex = 0;
+  let reachedEnd = false;
+
+  while (!reachedEnd) {
+    const wave = await Promise.all(
+      Array.from({ length: WAVE_SIZE }, (_, i) => {
+        const page = pageIndex + i;
+        return supabase
+          .from("payment_transactions")
+          .select(TRANSACTION_SELECT)
+          .order("transaction_date", { ascending: true })
+          .order("id", { ascending: true })
+          .range(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE - 1);
+      })
+    );
+    pageIndex += WAVE_SIZE;
+
+    for (const { data, error } of wave) {
+      if (error || !data || data.length === 0) {
+        reachedEnd = true;
+        continue;
+      }
+      all.push(...data);
+      if (data.length < PAGE_SIZE) reachedEnd = true;
+    }
   }
+
   return all;
 }
 
