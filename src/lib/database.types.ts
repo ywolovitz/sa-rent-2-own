@@ -41,6 +41,7 @@ export type VehicleCostType =
   | "other";
 export type BankAccountType = "cheque" | "savings" | "other";
 export type AuditAction = "insert" | "update" | "delete" | "reveal";
+export type PaymentTransactionType = "receipt" | "debit_note";
 
 export interface Database {
   public: {
@@ -389,6 +390,40 @@ export interface Database {
         >;
         Relationships: [];
       };
+      payment_transactions: {
+        Row: {
+          id: string;
+          contract_id: string;
+          transaction_date: string;
+          type: PaymentTransactionType;
+          reference: string;
+          invoice_reference: string;
+          amount: number;
+          cash_effect: number;
+          reversal_reference: string | null;
+          reversed_transaction_id: string | null;
+          source: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          contract_id: string;
+          transaction_date: string;
+          type: PaymentTransactionType;
+          reference: string;
+          invoice_reference: string;
+          amount: number;
+          cash_effect: number;
+          reversal_reference?: string | null;
+          reversed_transaction_id?: string | null;
+          source?: string;
+          created_at?: string;
+        };
+        Update: Partial<
+          Database["public"]["Tables"]["payment_transactions"]["Insert"]
+        >;
+        Relationships: [];
+      };
       insurance_claims: {
         Row: {
           id: string;
@@ -535,6 +570,7 @@ export interface Database {
       vehicle_cost_type: VehicleCostType;
       bank_account_type: BankAccountType;
       audit_action: AuditAction;
+      payment_transaction_type: PaymentTransactionType;
     };
   };
 }
