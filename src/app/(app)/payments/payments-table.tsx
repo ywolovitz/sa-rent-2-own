@@ -11,7 +11,7 @@ import { compareNumbers, compareStrings, useTableControls } from "@/lib/use-tabl
 
 import type { ContractPaymentSummaryRow } from "./types";
 
-type SortKey = "deal" | "client" | "lastDate" | "netCollected" | "reversals";
+type SortKey = "deal" | "client" | "lastDate" | "netCollected" | "reversals" | "outstanding";
 
 function formatRand(amount: number): string {
   return new Intl.NumberFormat("en-ZA", { style: "currency", currency: "ZAR" }).format(amount);
@@ -35,6 +35,8 @@ export function PaymentsTable({ rows }: { rows: ContractPaymentSummaryRow[] }) {
       compareNumbers(a.netCollected, b.netCollected),
     reversals: (a: ContractPaymentSummaryRow, b: ContractPaymentSummaryRow) =>
       compareNumbers(a.reversalCount, b.reversalCount),
+    outstanding: (a: ContractPaymentSummaryRow, b: ContractPaymentSummaryRow) =>
+      compareNumbers(a.outstandingBalance, b.outstandingBalance),
   } satisfies Record<SortKey, (a: ContractPaymentSummaryRow, b: ContractPaymentSummaryRow) => number>;
 
   const { search, setSearch, sortKey, sortDir, onSort, filteredRows } = useTableControls<
@@ -58,7 +60,7 @@ export function PaymentsTable({ rows }: { rows: ContractPaymentSummaryRow[] }) {
       />
       <div className="min-h-0 flex-1 overflow-auto rounded-md border">
         <Table>
-          <TableHeader>
+          <TableHeader className="bg-background sticky top-0 z-10">
             <TableRow>
               <SortableHead label="Deal number" sortKey="deal" activeKey={sortKey} direction={sortDir} onSort={onSort} />
               <SortableHead label="Client" sortKey="client" activeKey={sortKey} direction={sortDir} onSort={onSort} />
@@ -86,12 +88,20 @@ export function PaymentsTable({ rows }: { rows: ContractPaymentSummaryRow[] }) {
                 onSort={onSort}
                 className="text-right"
               />
+              <SortableHead
+                label="Outstanding"
+                sortKey="outstanding"
+                activeKey={sortKey}
+                direction={sortDir}
+                onSort={onSort}
+                className="text-right"
+              />
             </TableRow>
           </TableHeader>
           <TableBody>
             {filteredRows.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6} className="text-muted-foreground text-center">
+                <TableCell colSpan={7} className="text-muted-foreground text-center">
                   No payment history matches this search.
                 </TableCell>
               </TableRow>
@@ -110,6 +120,9 @@ export function PaymentsTable({ rows }: { rows: ContractPaymentSummaryRow[] }) {
                   </TableCell>
                   <TableCell className="text-right tabular-nums">{formatRand(row.netCollected)}</TableCell>
                   <TableCell className="text-right tabular-nums">{row.reversalCount}</TableCell>
+                  <TableCell className="text-right tabular-nums">
+                    {row.outstandingBalance != null ? formatRand(row.outstandingBalance) : "—"}
+                  </TableCell>
                 </TableRow>
               ))
             )}

@@ -7,11 +7,13 @@ export interface ContractPaymentSummaryRow {
   netCollected: number;
   reversalCount: number;
   transactionCount: number;
+  outstandingBalance: number | null;
 }
 
 export interface MonthlyCollectedDatum {
   month: string; // "Jan 2026"
   netCollected: number;
+  reversed: number;
 }
 
 export interface MonthlyReportCell {

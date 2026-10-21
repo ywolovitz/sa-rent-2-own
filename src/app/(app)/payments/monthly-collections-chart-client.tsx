@@ -1,6 +1,6 @@
 "use client";
 
-import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 import type { MonthlyCollectedDatum } from "./types";
 
@@ -25,7 +25,15 @@ export function MonthlyCollectionsChartClient({ data }: { data: MonthlyCollected
             fontSize: 12,
           }}
         />
-        <Bar dataKey="netCollected" fill="var(--brand-blue-dark)" radius={[4, 4, 0, 0]} maxBarSize={36} />
+        <Legend wrapperStyle={{ fontSize: 12 }} />
+        <Bar
+          dataKey="netCollected"
+          name="Net collected"
+          fill="var(--brand-blue-dark)"
+          radius={[4, 4, 0, 0]}
+          maxBarSize={36}
+        />
+        <Bar dataKey="reversed" name="Reversed" fill="var(--brand-red)" radius={[4, 4, 0, 0]} maxBarSize={36} />
       </BarChart>
     </ResponsiveContainer>
   );
