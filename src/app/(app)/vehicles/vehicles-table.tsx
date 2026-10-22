@@ -21,18 +21,13 @@ import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { MultiSelectFilter } from "@/components/ui/multi-select-filter";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ImageCaptureArea, SelectionActions } from "@/components/ui/selection-actions";
 import { ColumnVisibilityMenu } from "@/components/ui/column-visibility-menu";
 import { DraggableTableHead } from "@/components/ui/draggable-table-head";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { StatButtonPill, StatLinkPill } from "@/components/dashboard/stat-pill";
 import { daysUntil, formatDayCount, formatDisplayDate, isoDaysFromNow } from "@/lib/date-ranges";
@@ -670,8 +665,9 @@ export function VehiclesTable({
   // "Sold / End of Deal" vehicles live on their own tab, out of the working
   // fleet: they're excluded from the Fleet tab, its counts and its filters.
   const [view, setView] = useState<"fleet" | "sold">(initialStatus === "sold" ? "sold" : "fleet");
-  const [statusFilter, setStatusFilter] = useState<"all" | VehicleStatus>(
-    initialStatus && initialStatus !== "sold" ? initialStatus : "all"
+  // Empty = no status filter (everything in the tab).
+  const [statusFilter, setStatusFilter] = useState<VehicleStatus[]>(
+    initialStatus && initialStatus !== "sold" ? [initialStatus] : []
   );
   // Split from a single combined "due for service" filter into overdue vs.
   // upcoming, since those call for different urgency when staff are
@@ -688,7 +684,10 @@ export function VehiclesTable({
   // intersects to an empty, confusing result (e.g. Idle + Contract ending,
   // when no idle vehicle's contract happens to be ending soon).
   function selectStatus(status: "all" | VehicleStatus) {
-    setStatusFilter(status);
+    selectStatuses(status === "all" ? [] : [status]);
+  }
+  function selectStatuses(statuses: VehicleStatus[]) {
+    setStatusFilter(statuses);
     setServiceOverdue(false);
     setServiceUpcoming(false);
     setContractEndingSoon(false);
@@ -701,7 +700,7 @@ export function VehiclesTable({
     setServiceOverdue((was) => {
       const next = !was;
       if (next) {
-        setStatusFilter("all");
+        setStatusFilter([]);
         setServiceUpcoming(false);
         setContractEndingSoon(false);
       }
@@ -712,7 +711,7 @@ export function VehiclesTable({
     setServiceUpcoming((was) => {
       const next = !was;
       if (next) {
-        setStatusFilter("all");
+        setStatusFilter([]);
         setServiceOverdue(false);
         setContractEndingSoon(false);
       }
@@ -723,7 +722,7 @@ export function VehiclesTable({
     setContractEndingSoon((was) => {
       const next = !was;
       if (next) {
-        setStatusFilter("all");
+        setStatusFilter([]);
         setServiceOverdue(false);
         setServiceUpcoming(false);
       }
@@ -864,7 +863,7 @@ export function VehiclesTable({
   ).length;
 
   const preFiltered = viewRows
-    .filter((r) => statusFilter === "all" || r.status === statusFilter)
+    .filter((r) => statusFilter.length === 0 || statusFilter.includes(r.status))
     .filter((r) => !serviceOverdue || (r.next_service_date && r.next_service_date < today))
     .filter(
       (r) =>
@@ -950,7 +949,7 @@ export function VehiclesTable({
       filterSummary: summarizeFilters([
         view === "sold" && "Tab: Sold / End of Deal",
         search && `Search: "${search}"`,
-        statusFilter !== "all" && `Status: ${STATUS_LABELS[statusFilter]}`,
+        statusFilter.length > 0 && `Status: ${statusFilter.map((s) => STATUS_LABELS[s]).join(", ")}`,
         serviceOverdue && "Services overdue",
         serviceUpcoming && "Upcoming services",
         contractEndingSoon && "Contract ending",
@@ -980,28 +979,28 @@ export function VehiclesTable({
             label="Fleet"
             value={fleetCount}
             subtitle="Total vehicles"
-            isActive={statusFilter === "all" && !serviceOverdue && !serviceUpcoming && !contractEndingSoon}
+            isActive={statusFilter.length === 0 && !serviceOverdue && !serviceUpcoming && !contractEndingSoon}
             onClick={() => selectStatus("all")}
           />
           <StatButtonPill
             label="Active"
             value={activeCount}
             subtitle="On road"
-            isActive={statusFilter === "on_road"}
+            isActive={statusFilter.length === 1 && statusFilter[0] === "on_road"}
             onClick={() => selectStatus("on_road")}
           />
           <StatButtonPill
             label="Idle"
             value={idleCount}
             subtitle="Parked"
-            isActive={statusFilter === "parked"}
+            isActive={statusFilter.length === 1 && statusFilter[0] === "parked"}
             onClick={() => selectStatus("parked")}
           />
           <StatButtonPill
             label="Workshop"
             value={workshopCount}
             subtitle="In repair"
-            isActive={statusFilter === "in_repair"}
+            isActive={statusFilter.length === 1 && statusFilter[0] === "in_repair"}
             onClick={() => selectStatus("in_repair")}
           />
           <StatButtonPill
@@ -1038,21 +1037,15 @@ export function VehiclesTable({
           className="bg-background max-w-xs"
         />
         {view === "fleet" && (
-          <Select value={statusFilter} onValueChange={(v) => selectStatus(v as "all" | VehicleStatus)}>
-            <SelectTrigger className="bg-background w-44">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All statuses</SelectItem>
-              {vehicleStatusValues
-                .filter((status) => status !== "sold")
-                .map((status) => (
-                  <SelectItem key={status} value={status}>
-                    {STATUS_LABELS[status]}
-                  </SelectItem>
-                ))}
-            </SelectContent>
-          </Select>
+          <MultiSelectFilter
+            options={vehicleStatusValues
+              .filter((status) => status !== "sold")
+              .map((status) => ({ value: status, label: STATUS_LABELS[status] }))}
+            selected={statusFilter}
+            onChange={selectStatuses}
+            allLabel="All statuses"
+            noun="statuses"
+          />
         )}
         {view === "fleet" && canViewContracts && (
           <Button
