@@ -51,8 +51,13 @@ export function ClientsTable({
   canEdit: boolean;
 }) {
   const [bankingFilter, setBankingFilter] = useState<BankingFilter>("all");
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  // One shared edit panel instead of one per row; keyed per open so its form
+  // starts from the client's current values, and kept mounted after closing
+  // so the sheet can finish its close animation.
+  const [panel, setPanel] = useState<{ clientId: string; open: boolean; openCount: number } | null>(null);
   const captureRef = useRef<HTMLDivElement>(null);
+
+  const panelClient = panel ? rows.find((r) => r.id === panel.clientId) : undefined;
 
   const searchFn = useCallback(
     (row: ClientWithBanking, query: string) =>
@@ -192,7 +197,7 @@ export function ClientsTable({
               <TableRow
                 key={client.id}
                 className="cursor-pointer"
-                onClick={() => setSelectedId(client.id)}
+                onClick={() => setPanel((prev) => ({ clientId: client.id, open: true, openCount: (prev?.openCount ?? 0) + 1 }))}
               >
                 <TableCell
                   className="sticky left-0 z-10 w-20 border-r bg-background group-hover:bg-muted group-data-[state=selected]:bg-muted"
@@ -221,12 +226,6 @@ export function ClientsTable({
                   className="flex items-center justify-end gap-1"
                   onClick={(e) => e.stopPropagation()}
                 >
-                  <ClientPanel
-                    client={client}
-                    readOnly={!canEdit}
-                    open={selectedId === client.id}
-                    onOpenChange={(next) => setSelectedId(next ? client.id : null)}
-                  />
                   {canEdit && <DeleteClientButton clientId={client.id} label={client.full_name} />}
                 </TableCell>
               </TableRow>
@@ -241,6 +240,16 @@ export function ClientsTable({
           </TableBody>
         </Table>
       </div>
+
+      {panelClient && panel && (
+        <ClientPanel
+          key={`${panel.clientId}:${panel.openCount}`}
+          client={panelClient}
+          readOnly={!canEdit}
+          open={panel.open}
+          onOpenChange={(next) => setPanel((prev) => (prev ? { ...prev, open: next } : prev))}
+        />
+      )}
 
       <ImageCaptureArea captureRef={captureRef}>
         <Table>

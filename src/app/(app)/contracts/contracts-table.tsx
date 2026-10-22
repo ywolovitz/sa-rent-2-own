@@ -93,8 +93,13 @@ export function ContractsTable({
   const [statusFilter, setStatusFilter] = useState<"all" | ContractStatus>("all");
   const [typeFilter, setTypeFilter] = useState<"all" | ContractType>("all");
   const [endingSoon, setEndingSoon] = useState(initialEndingSoon ?? false);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  // One shared edit panel instead of one per row; keyed per open so its form
+  // starts from the contract's current values, and kept mounted after
+  // closing so the sheet can finish its close animation.
+  const [panel, setPanel] = useState<{ contractId: string; open: boolean; openCount: number } | null>(null);
   const captureRef = useRef<HTMLDivElement>(null);
+
+  const panelContract = panel ? rows.find((r) => r.id === panel.contractId) : undefined;
 
   const searchFn = useCallback(
     (row: ContractRow, query: string) =>
@@ -331,7 +336,7 @@ export function ContractsTable({
               <TableRow
                 key={row.id}
                 className="cursor-pointer"
-                onClick={() => setSelectedId(row.id)}
+                onClick={() => setPanel((prev) => ({ contractId: row.id, open: true, openCount: (prev?.openCount ?? 0) + 1 }))}
               >
                 <TableCell
                   className="sticky left-0 z-10 w-20 border-r bg-background group-hover:bg-muted group-data-[state=selected]:bg-muted"
@@ -368,15 +373,6 @@ export function ContractsTable({
                   className="flex items-center justify-end gap-1"
                   onClick={(e) => e.stopPropagation()}
                 >
-                  <ContractPanel
-                    contract={row}
-                    vehicles={vehicles}
-                    clients={clients}
-                    readOnly={!canEdit}
-                    showPrices={canEdit}
-                    open={selectedId === row.id}
-                    onOpenChange={(next) => setSelectedId(next ? row.id : null)}
-                  />
                   {canEdit && <DeleteContractButton contractId={row.id} label={row.vehicleLabel} />}
                 </TableCell>
               </TableRow>
@@ -391,6 +387,19 @@ export function ContractsTable({
           </TableBody>
         </Table>
       </div>
+
+      {panelContract && panel && (
+        <ContractPanel
+          key={`${panel.contractId}:${panel.openCount}`}
+          contract={panelContract}
+          vehicles={vehicles}
+          clients={clients}
+          readOnly={!canEdit}
+          showPrices={canEdit}
+          open={panel.open}
+          onOpenChange={(next) => setPanel((prev) => (prev ? { ...prev, open: next } : prev))}
+        />
+      )}
 
       <ImageCaptureArea captureRef={captureRef}>
         <Table>

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 
 /**
  * Checkbox selection over a table's currently visible (filtered) rows.
@@ -20,14 +20,17 @@ export function useRowSelection<Row>(visibleRows: Row[], getId: (row: Row) => st
     [visibleRows, selectedIds]
   );
 
-  function toggleRow(id: string) {
+  // Stable identities (they only touch state via the functional setter) so
+  // memoised table rows that receive them as props don't re-render on every
+  // selection or filter change.
+  const toggleRow = useCallback((id: string) => {
     setSelectedIds((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
       return next;
     });
-  }
+  }, []);
 
   function toggleAllVisible() {
     setSelectedIds((prev) => {
@@ -38,9 +41,9 @@ export function useRowSelection<Row>(visibleRows: Row[], getId: (row: Row) => st
     });
   }
 
-  function clear() {
+  const clear = useCallback(() => {
     setSelectedIds(new Set());
-  }
+  }, []);
 
   return {
     selectedIds,

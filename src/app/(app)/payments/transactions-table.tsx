@@ -26,6 +26,11 @@ import { compareNumbers, compareStrings, useTableControls } from "@/lib/use-tabl
 
 import type { PaymentTransactionRow } from "./types";
 
+// The ledger holds thousands of rows; rendering every one made the tab
+// sluggish to open and to filter. Show a page at a time — search, filters,
+// sorting, select-all and export all still work across every matching row.
+const PAGE_SIZE = 250;
+
 type SortKey = "date" | "deal" | "client" | "amount";
 type TypeFilter = "all" | "receipt" | "debit_note";
 
@@ -47,6 +52,7 @@ function StatusBadge({ row }: { row: PaymentTransactionRow }) {
 
 export function TransactionsTable({ rows, exportedBy }: { rows: PaymentTransactionRow[]; exportedBy: string }) {
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
+  const [shown, setShown] = useState(PAGE_SIZE);
   const [openVehicle, setOpenVehicle] = useState<{ id: string; reg: string | null } | null>(null);
   const captureRef = useRef<HTMLDivElement>(null);
 
@@ -80,6 +86,13 @@ export function TransactionsTable({ rows, exportedBy }: { rows: PaymentTransacti
     defaultSortKey: "date",
     storageKey: "payments-transactions-sort",
   });
+
+  function handleSort(key: SortKey) {
+    onSort(key);
+    setShown(PAGE_SIZE);
+  }
+
+  const visibleRows = filteredRows.slice(0, shown);
 
   const {
     selectedIds,
@@ -137,10 +150,19 @@ export function TransactionsTable({ rows, exportedBy }: { rows: PaymentTransacti
         <Input
           placeholder="Search deal number, client, reg, or reference…"
           value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          onChange={(e) => {
+            setSearch(e.target.value);
+            setShown(PAGE_SIZE);
+          }}
           className="bg-background max-w-xs"
         />
-        <Select value={typeFilter} onValueChange={(v) => setTypeFilter(v as TypeFilter)}>
+        <Select
+          value={typeFilter}
+          onValueChange={(v) => {
+            setTypeFilter(v as TypeFilter);
+            setShown(PAGE_SIZE);
+          }}
+        >
           <SelectTrigger className="bg-background w-44">
             <SelectValue />
           </SelectTrigger>
@@ -177,9 +199,9 @@ export function TransactionsTable({ rows, exportedBy }: { rows: PaymentTransacti
                   <span className="text-muted-foreground flex-1 text-center">#</span>
                 </div>
               </TableHead>
-              <SortableHead label="Date" sortKey="date" activeKey={sortKey} direction={sortDir} onSort={onSort} />
-              <SortableHead label="Deal number" sortKey="deal" activeKey={sortKey} direction={sortDir} onSort={onSort} />
-              <SortableHead label="Client" sortKey="client" activeKey={sortKey} direction={sortDir} onSort={onSort} />
+              <SortableHead label="Date" sortKey="date" activeKey={sortKey} direction={sortDir} onSort={handleSort} />
+              <SortableHead label="Deal number" sortKey="deal" activeKey={sortKey} direction={sortDir} onSort={handleSort} />
+              <SortableHead label="Client" sortKey="client" activeKey={sortKey} direction={sortDir} onSort={handleSort} />
               <TableHead>Reg</TableHead>
               <TableHead>Type</TableHead>
               <TableHead>Invoice</TableHead>
@@ -188,7 +210,7 @@ export function TransactionsTable({ rows, exportedBy }: { rows: PaymentTransacti
                 sortKey="amount"
                 activeKey={sortKey}
                 direction={sortDir}
-                onSort={onSort}
+                onSort={handleSort}
                 className="text-right"
               />
               <TableHead>Status</TableHead>
@@ -202,7 +224,7 @@ export function TransactionsTable({ rows, exportedBy }: { rows: PaymentTransacti
                 </TableCell>
               </TableRow>
             ) : (
-              filteredRows.map((row, index) => (
+              visibleRows.map((row, index) => (
                 <TableRow key={row.id}>
                   <TableCell className="sticky left-0 z-10 w-20 border-r bg-background group-hover:bg-muted group-data-[state=selected]:bg-muted">
                     <div className="flex items-center gap-2">
@@ -235,6 +257,17 @@ export function TransactionsTable({ rows, exportedBy }: { rows: PaymentTransacti
             )}
           </TableBody>
         </Table>
+        {filteredRows.length > shown && (
+          <div className="text-muted-foreground flex items-center justify-center gap-3 border-t p-3 text-sm">
+            Showing {visibleRows.length.toLocaleString()} of {filteredRows.length.toLocaleString()}
+            <Button type="button" variant="outline" size="sm" onClick={() => setShown((n) => n + PAGE_SIZE)}>
+              Show {Math.min(PAGE_SIZE, filteredRows.length - shown)} more
+            </Button>
+            <Button type="button" variant="ghost" size="sm" onClick={() => setShown(filteredRows.length)}>
+              Show all
+            </Button>
+          </div>
+        )}
       </div>
 
       <ImageCaptureArea captureRef={captureRef}>

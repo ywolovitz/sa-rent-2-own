@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState, useTransition } from "react";
+import { memo, useCallback, useMemo, useRef, useState, useTransition } from "react";
 import {
   DndContext,
   KeyboardSensor,
@@ -15,7 +15,7 @@ import {
   horizontalListSortingStrategy,
   sortableKeyboardCoordinates,
 } from "@dnd-kit/sortable";
-import { Download, Pencil } from "lucide-react";
+import { ChevronDown, Download, Pencil } from "lucide-react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -154,6 +154,35 @@ function ColourChip({ name }: { name: string | null }) {
 const INLINE_SELECT_TRIGGER_CLASS =
   "h-auto w-fit gap-1 border-none bg-transparent p-0 shadow-none hover:opacity-80 focus-visible:ring-1 data-[state=open]:opacity-80 [&_svg]:size-3 [&_svg]:opacity-40";
 
+/** Looks like the closed inline dropdown (value + faint chevron). The real
+ * Radix <Select> is only mounted once it's clicked — mounting two of them
+ * (each carrying every option) on every one of ~200 rows made every filter
+ * click and tab switch re-render thousands of components. */
+function InlineSelectButton({
+  onClick,
+  label,
+  children,
+}: {
+  onClick: () => void;
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      onClick={(e) => {
+        e.stopPropagation();
+        onClick();
+      }}
+      className="inline-flex items-center gap-1 hover:opacity-80 focus-visible:ring-1 focus-visible:outline-none"
+    >
+      {children}
+      <ChevronDown className="size-3 opacity-40" />
+    </button>
+  );
+}
+
 function StatusCell({
   vehicle,
   canManage,
@@ -162,13 +191,25 @@ function StatusCell({
   canManage: boolean;
 }) {
   const [isPending, startTransition] = useTransition();
+  const [editing, setEditing] = useState(false);
 
-  if (!canManage) {
-    return <Badge variant={STATUS_VARIANT[vehicle.status]}>{STATUS_LABELS[vehicle.status]}</Badge>;
+  const badge = <Badge variant={STATUS_VARIANT[vehicle.status]}>{STATUS_LABELS[vehicle.status]}</Badge>;
+
+  if (!canManage) return badge;
+  if (!editing) {
+    return (
+      <InlineSelectButton label="Change status" onClick={() => setEditing(true)}>
+        {badge}
+      </InlineSelectButton>
+    );
   }
 
   return (
     <Select
+      open
+      onOpenChange={(next) => {
+        if (!next) setEditing(false);
+      }}
       value={vehicle.status}
       disabled={isPending}
       onValueChange={(value) => {
@@ -186,7 +227,7 @@ function StatusCell({
       }}
     >
       <SelectTrigger size="sm" className={INLINE_SELECT_TRIGGER_CLASS} onClick={(e) => e.stopPropagation()}>
-        <Badge variant={STATUS_VARIANT[vehicle.status]}>{STATUS_LABELS[vehicle.status]}</Badge>
+        {badge}
       </SelectTrigger>
       <SelectContent onClick={(e) => e.stopPropagation()}>
         {vehicleStatusValues.map((status) => (
@@ -207,15 +248,27 @@ function ColourCell({
   canManage: boolean;
 }) {
   const [isPending, startTransition] = useTransition();
+  const [editing, setEditing] = useState(false);
 
   if (!canManage) {
     return <ColourChip name={vehicle.colour} />;
+  }
+  if (!editing) {
+    return (
+      <InlineSelectButton label="Change colour" onClick={() => setEditing(true)}>
+        <ColourChip name={vehicle.colour} />
+      </InlineSelectButton>
+    );
   }
 
   const current = vehicle.colour;
 
   return (
     <Select
+      open
+      onOpenChange={(next) => {
+        if (!next) setEditing(false);
+      }}
       value={current ?? undefined}
       disabled={isPending}
       onValueChange={(value) => {
@@ -614,6 +667,66 @@ function exportValue(column: ColumnId, vehicle: VehicleWithRegistration): string
   }
 }
 
+/**
+ * One table row. Memoised: a filter click or tab switch only re-renders rows
+ * whose own props changed, instead of every cell of every row. `columnsKey`
+ * is the visible columns joined into a string so the memo compares by value.
+ */
+const VehicleRow = memo(function VehicleRow({
+  vehicle,
+  index,
+  columnsKey,
+  canManage,
+  isSelected,
+  onToggleSelected,
+  onEdit,
+}: {
+  vehicle: VehicleWithRegistration;
+  index: number;
+  columnsKey: string;
+  canManage: boolean;
+  isSelected: boolean;
+  onToggleSelected: (id: string) => void;
+  onEdit: (id: string) => void;
+}) {
+  const columns = useMemo(() => columnsKey.split("|") as ColumnId[], [columnsKey]);
+
+  return (
+    <TableRow>
+      <TableCell className="sticky left-0 z-10 w-20 border-r bg-background group-hover:bg-muted group-data-[state=selected]:bg-muted">
+        <div className="flex items-center gap-2">
+          <Checkbox
+            checked={isSelected}
+            onCheckedChange={() => onToggleSelected(vehicle.id)}
+            aria-label={`Select ${vehicle.current_plate ?? vehicle.file_no}`}
+          />
+          <span className="text-muted-foreground flex-1 text-center">{index + 1}</span>
+        </div>
+      </TableCell>
+      {columns.map((column) => (
+        <TableCell key={column} className={column === "reg" ? "font-medium" : undefined}>
+          {renderCell(column, vehicle, canManage)}
+        </TableCell>
+      ))}
+      {canManage && (
+        <TableCell className="flex items-center justify-end gap-1">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="size-6"
+            aria-label="Edit vehicle"
+            onClick={() => onEdit(vehicle.id)}
+          >
+            <Pencil className="size-3" />
+          </Button>
+          <DeleteVehicleButton vehicleId={vehicle.id} label={vehicle.current_plate ?? vehicle.file_no} />
+        </TableCell>
+      )}
+    </TableRow>
+  );
+});
+
 export function VehiclesTable({
   rows,
   canManage,
@@ -652,7 +765,16 @@ export function VehiclesTable({
   const [serviceOverdue, setServiceOverdue] = useState(false);
   const [serviceUpcoming, setServiceUpcoming] = useState(initialServiceDueSoon ?? false);
   const [contractEndingSoon, setContractEndingSoon] = useState(initialContractEndingSoon ?? false);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  // One shared edit panel for the whole table, not one per row (each panel
+  // carries its own form + sheet). It's keyed per open so the form always
+  // starts from the vehicle's current values, and stays mounted after
+  // closing so the sheet can finish its close animation.
+  const [panel, setPanel] = useState<{ vehicleId: string; open: boolean; openCount: number } | null>(null);
+  const openPanel = useCallback(
+    (vehicleId: string) => setPanel((prev) => ({ vehicleId, open: true, openCount: (prev?.openCount ?? 0) + 1 })),
+    []
+  );
+  const panelVehicle = panel ? rows.find((r) => r.id === panel.vehicleId) : undefined;
   const captureRef = useRef<HTMLDivElement>(null);
 
   function toggleStatus(status: VehicleStatus) {
@@ -727,6 +849,7 @@ export function VehiclesTable({
   const visibleColumns = order.filter(
     (id) => !isHidden(id) && isColumnAllowed(id)
   );
+  const columnsKey = visibleColumns.join("|");
   const toggleableColumns = DEFAULT_COLUMN_ORDER.filter(isColumnAllowed).map((id) => ({ id, label: COLUMN_LABELS[id] }));
 
   const searchFn = useCallback(
@@ -1069,47 +1192,16 @@ export function VehiclesTable({
             </TableHeader>
             <TableBody>
               {filteredRows.map((vehicle, index) => (
-                <TableRow key={vehicle.id}>
-                  <TableCell className="sticky left-0 z-10 w-20 border-r bg-background group-hover:bg-muted group-data-[state=selected]:bg-muted">
-                    <div className="flex items-center gap-2">
-                      <Checkbox
-                        checked={selectedIds.has(vehicle.id)}
-                        onCheckedChange={() => toggleRowSelected(vehicle.id)}
-                        aria-label={`Select ${vehicle.current_plate ?? vehicle.file_no}`}
-                      />
-                      <span className="text-muted-foreground flex-1 text-center">{index + 1}</span>
-                    </div>
-                  </TableCell>
-                  {visibleColumns.map((column) => (
-                    <TableCell key={column} className={column === "reg" ? "font-medium" : undefined}>
-                      {renderCell(column, vehicle, canManage)}
-                    </TableCell>
-                  ))}
-                  {canManage && (
-                    <TableCell className="flex items-center justify-end gap-1">
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        className="size-6"
-                        aria-label="Edit vehicle"
-                        onClick={() => setSelectedId(vehicle.id)}
-                      >
-                        <Pencil className="size-3" />
-                      </Button>
-                      <VehiclePanel
-                        vehicle={vehicle}
-                        canManage={canManage}
-                        open={selectedId === vehicle.id}
-                        onOpenChange={(next) => setSelectedId(next ? vehicle.id : null)}
-                      />
-                      <DeleteVehicleButton
-                        vehicleId={vehicle.id}
-                        label={vehicle.current_plate ?? vehicle.file_no}
-                      />
-                    </TableCell>
-                  )}
-                </TableRow>
+                <VehicleRow
+                  key={vehicle.id}
+                  vehicle={vehicle}
+                  index={index}
+                  columnsKey={columnsKey}
+                  canManage={canManage}
+                  isSelected={selectedIds.has(vehicle.id)}
+                  onToggleSelected={toggleRowSelected}
+                  onEdit={openPanel}
+                />
               ))}
               {filteredRows.length === 0 && (
                 <TableRow>
@@ -1125,6 +1217,16 @@ export function VehiclesTable({
           </Table>
         </DndContext>
       </div>
+
+      {canManage && panel && panelVehicle && (
+        <VehiclePanel
+          key={`${panel.vehicleId}:${panel.openCount}`}
+          vehicle={panelVehicle}
+          canManage={canManage}
+          open={panel.open}
+          onOpenChange={(next) => setPanel((prev) => (prev ? { ...prev, open: next } : prev))}
+        />
+      )}
 
       <ImageCaptureArea captureRef={captureRef}>
           <Table>
