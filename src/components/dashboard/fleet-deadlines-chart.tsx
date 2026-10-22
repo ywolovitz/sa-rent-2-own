@@ -26,7 +26,7 @@ export async function FleetDeadlinesChart() {
   const supabase = await createClient();
 
   const [{ data: vehicles }, { data: contracts }] = await Promise.all([
-    supabase.from("vehicles").select("next_service_date, license_disc_expiry"),
+    supabase.from("vehicles").select("status, next_service_date, license_disc_expiry"),
     supabase.from("contracts").select("end_date").eq("status", "active"),
   ]);
 
@@ -37,6 +37,9 @@ export async function FleetDeadlinesChart() {
   });
 
   for (const v of vehicles ?? []) {
+    // Sold / End of Deal vehicles are off the fleet — no service or licence deadlines.
+    if (v.status === "sold") continue;
+
     const serviceBucket = weekBucket(v.next_service_date);
     if (serviceBucket !== null) weeks[serviceBucket].service += 1;
 

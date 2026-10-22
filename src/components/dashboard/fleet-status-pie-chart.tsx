@@ -46,8 +46,9 @@ export async function FleetStatusPieChart() {
     counts[v.status] += 1;
   }
 
+  // Sold / End of Deal vehicles are off the working fleet — not charted.
   const data = (Object.keys(counts) as VehicleStatus[])
-    .filter((status) => counts[status] > 0)
+    .filter((status) => status !== "sold" && counts[status] > 0)
     .map((status) => ({
       name: STATUS_LABELS[status],
       value: counts[status],

@@ -21,6 +21,7 @@ import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ImageCaptureArea, SelectionActions } from "@/components/ui/selection-actions";
 import { ColumnVisibilityMenu } from "@/components/ui/column-visibility-menu";
 import { DraggableTableHead } from "@/components/ui/draggable-table-head";
@@ -52,6 +53,7 @@ import type { PaymentMethod, TrackerStatus, VehicleStatus } from "@/lib/database
 
 import { vehicleStatusValues } from "./schema";
 import { updateVehicleColour, updateVehicleStatus } from "./actions";
+import { InlineEditCell } from "./inline-edit-cell";
 import { DeleteVehicleButton } from "./delete-vehicle-button";
 import { VehiclePanel } from "./vehicle-panel";
 import type { VehicleWithRegistration } from "./types";
@@ -75,7 +77,7 @@ const STATUS_LABELS: Record<VehicleStatus, string> = {
   parked: "Parked",
   in_repair: "In repair",
   for_sale: "For sale",
-  sold: "Sold",
+  sold: "Sold / End of Deal",
   written_off: "Written off",
 };
 
@@ -207,6 +209,8 @@ function StatusCell({
         startTransition(async () => {
           const result = await updateVehicleStatus(vehicle.id, status);
           if (result.error) toast.error(result.error);
+          else if (status === "sold") toast.success("Moved to the Sold / End of Deal tab");
+          else if (vehicle.status === "sold") toast.success("Moved back to the Fleet tab");
         });
       }}
     >
@@ -478,15 +482,51 @@ function renderCell(column: ColumnId, vehicle: VehicleWithRegistration, canManag
     case "nextService":
       return <ServiceCountdown date={vehicle.next_service_date} />;
     case "nextServiceDate":
-      return <DueDateGradient date={vehicle.next_service_date} />;
+      return canManage ? (
+        <InlineEditCell
+          vehicleId={vehicle.id}
+          field="next_service_date"
+          kind="date"
+          label="next service date"
+          value={vehicle.next_service_date}
+          display={<DueDateGradient date={vehicle.next_service_date} />}
+          renderPending={(draft) => <DueDateGradient date={draft} />}
+        />
+      ) : (
+        <DueDateGradient date={vehicle.next_service_date} />
+      );
     case "monthsLeft":
       return <ContractCountdown date={vehicle.current_contract_end_date} />;
     case "contractEndDate":
       return <PastDueDate date={vehicle.current_contract_end_date} />;
     case "currentMileage":
-      return vehicle.current_mileage?.toLocaleString() ?? "—";
+      return canManage ? (
+        <InlineEditCell
+          vehicleId={vehicle.id}
+          field="current_mileage"
+          kind="number"
+          label="current mileage"
+          value={vehicle.current_mileage}
+          display={vehicle.current_mileage?.toLocaleString() ?? "—"}
+          renderPending={(draft) => Number(draft).toLocaleString()}
+        />
+      ) : (
+        (vehicle.current_mileage?.toLocaleString() ?? "—")
+      );
     case "nextServiceKm":
-      return vehicle.next_service_km?.toLocaleString() ?? "—";
+      return canManage ? (
+        <InlineEditCell
+          vehicleId={vehicle.id}
+          field="next_service_km"
+          kind="number"
+          label="next service km"
+          value={vehicle.next_service_km}
+          display={vehicle.next_service_km?.toLocaleString() ?? "—"}
+          renderPending={(draft) => Number(draft).toLocaleString()}
+        />
+      ) : (
+        (vehicle.next_service_km?.toLocaleString() ?? "—")
+      );
     case "lastServicedBy":
       return vehicle.last_serviced_by ?? "—";
     case "trackerRunning":
@@ -627,7 +667,12 @@ export function VehiclesTable({
   contractsEndingSoonCount: number;
   exportedBy: string;
 }) {
-  const [statusFilter, setStatusFilter] = useState<"all" | VehicleStatus>(initialStatus ?? "all");
+  // "Sold / End of Deal" vehicles live on their own tab, out of the working
+  // fleet: they're excluded from the Fleet tab, its counts and its filters.
+  const [view, setView] = useState<"fleet" | "sold">(initialStatus === "sold" ? "sold" : "fleet");
+  const [statusFilter, setStatusFilter] = useState<"all" | VehicleStatus>(
+    initialStatus && initialStatus !== "sold" ? initialStatus : "all"
+  );
   // Split from a single combined "due for service" filter into overdue vs.
   // upcoming, since those call for different urgency when staff are
   // triaging the fleet.
@@ -647,6 +692,10 @@ export function VehiclesTable({
     setServiceOverdue(false);
     setServiceUpcoming(false);
     setContractEndingSoon(false);
+  }
+  function changeView(next: "fleet" | "sold") {
+    setView(next);
+    selectStatus("all");
   }
   function toggleServiceOverdue() {
     setServiceOverdue((was) => {
@@ -799,18 +848,22 @@ export function VehiclesTable({
   // Quick-filter pill counts — always against the full dataset, not
   // preFiltered/filteredRows, so they read as stable totals rather than
   // shrinking as other filters narrow the table.
-  const fleetCount = rows.length;
-  const activeCount = rows.filter((r) => r.status === "on_road").length;
-  const idleCount = rows.filter((r) => r.status === "parked").length;
-  const workshopCount = rows.filter((r) => r.status === "in_repair").length;
-  const serviceOverdueCount = rows.filter(
+  const fleetRows = rows.filter((r) => r.status !== "sold");
+  const soldRows = rows.filter((r) => r.status === "sold");
+  const viewRows = view === "sold" ? soldRows : fleetRows;
+
+  const fleetCount = fleetRows.length;
+  const activeCount = fleetRows.filter((r) => r.status === "on_road").length;
+  const idleCount = fleetRows.filter((r) => r.status === "parked").length;
+  const workshopCount = fleetRows.filter((r) => r.status === "in_repair").length;
+  const serviceOverdueCount = fleetRows.filter(
     (r) => r.next_service_date && r.next_service_date < today
   ).length;
-  const serviceUpcomingCount = rows.filter(
+  const serviceUpcomingCount = fleetRows.filter(
     (r) => r.next_service_date && r.next_service_date >= today && r.next_service_date <= serviceDueCutoff
   ).length;
 
-  const preFiltered = rows
+  const preFiltered = viewRows
     .filter((r) => statusFilter === "all" || r.status === statusFilter)
     .filter((r) => !serviceOverdue || (r.next_service_date && r.next_service_date < today))
     .filter(
@@ -895,6 +948,7 @@ export function VehiclesTable({
       sheetName: "Vehicles",
       title: "SAR2O Fleet — Vehicles Export",
       filterSummary: summarizeFilters([
+        view === "sold" && "Tab: Sold / End of Deal",
         search && `Search: "${search}"`,
         statusFilter !== "all" && `Status: ${STATUS_LABELS[statusFilter]}`,
         serviceOverdue && "Services overdue",
@@ -910,8 +964,18 @@ export function VehiclesTable({
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h1 className="text-2xl font-semibold tracking-tight">Vehicles</h1>
+        <div className="flex flex-wrap items-center gap-4">
+          <h1 className="text-2xl font-semibold tracking-tight">Vehicles</h1>
+          <Tabs value={view} onValueChange={(v) => changeView(v as "fleet" | "sold")}>
+            <TabsList>
+              <TabsTrigger value="fleet">Fleet ({fleetRows.length})</TabsTrigger>
+              <TabsTrigger value="sold">Sold / End of Deal ({soldRows.length})</TabsTrigger>
+            </TabsList>
+          </Tabs>
+        </div>
         <div className="flex flex-wrap items-center gap-2">
+          {view === "fleet" && (
+            <>
           <StatButtonPill
             label="Fleet"
             value={fleetCount}
@@ -960,6 +1024,8 @@ export function VehiclesTable({
             subtitle="Ending within 3 months"
             href="/contracts?ending=soon"
           />
+            </>
+          )}
           {canManage && <VehiclePanel />}
         </div>
       </div>
@@ -971,20 +1037,24 @@ export function VehiclesTable({
           onChange={(e) => setSearch(e.target.value)}
           className="bg-background max-w-xs"
         />
-        <Select value={statusFilter} onValueChange={(v) => selectStatus(v as "all" | VehicleStatus)}>
-          <SelectTrigger className="bg-background w-44">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All statuses</SelectItem>
-            {vehicleStatusValues.map((status) => (
-              <SelectItem key={status} value={status}>
-                {STATUS_LABELS[status]}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        {canViewContracts && (
+        {view === "fleet" && (
+          <Select value={statusFilter} onValueChange={(v) => selectStatus(v as "all" | VehicleStatus)}>
+            <SelectTrigger className="bg-background w-44">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All statuses</SelectItem>
+              {vehicleStatusValues
+                .filter((status) => status !== "sold")
+                .map((status) => (
+                  <SelectItem key={status} value={status}>
+                    {STATUS_LABELS[status]}
+                  </SelectItem>
+                ))}
+            </SelectContent>
+          </Select>
+        )}
+        {view === "fleet" && canViewContracts && (
           <Button
             type="button"
             variant={contractEndingSoon ? "default" : "outline"}
@@ -1010,9 +1080,9 @@ export function VehiclesTable({
           onClear={clearSelection}
         />
         <p className="text-muted-foreground text-sm">
-          {filteredRows.length === rows.length
-            ? `${rows.length} in the fleet`
-            : `${filteredRows.length} of ${rows.length}`}
+          {filteredRows.length === viewRows.length
+            ? `${viewRows.length} ${view === "sold" ? "sold / ended" : "in the fleet"}`
+            : `${filteredRows.length} of ${viewRows.length}`}
         </p>
       </div>
 

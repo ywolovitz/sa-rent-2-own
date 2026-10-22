@@ -53,7 +53,7 @@ const STATUS_LABELS: Record<(typeof vehicleStatusValues)[number], string> = {
   parked: "Parked",
   in_repair: "In repair",
   for_sale: "For sale",
-  sold: "Sold",
+  sold: "Sold / End of Deal",
   written_off: "Written off",
 };
 

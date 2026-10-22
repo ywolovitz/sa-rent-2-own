@@ -38,11 +38,14 @@ export async function FleetStatsCards() {
   }
 
   const serviceDueCutoff = isoDaysFromNow(30);
+  // "Sold / End of Deal" vehicles are off the working fleet (they live on
+  // their own Vehicles tab), so they don't count toward the fleet total or
+  // as service-due.
   const servicingDueSoonCount = (vehicles ?? []).filter(
-    (v) => v.next_service_date && v.next_service_date <= serviceDueCutoff
+    (v) => v.status !== "sold" && v.next_service_date && v.next_service_date <= serviceDueCutoff
   ).length;
 
-  const total = vehicles?.length ?? 0;
+  const total = (vehicles?.length ?? 0) - counts.sold;
 
   return (
     <div className="flex flex-wrap gap-2">

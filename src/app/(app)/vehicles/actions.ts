@@ -175,6 +175,53 @@ export async function updateVehicleColour(vehicleId: string, colour: string): Pr
   return {};
 }
 
+/** Fields the Vehicles table lets you edit by clicking the value. */
+const inlineEditableFields = ["current_mileage", "next_service_km", "next_service_date"] as const;
+export type InlineEditableField = (typeof inlineEditableFields)[number];
+
+/**
+ * Updates one of the inline-editable service/mileage fields. `raw` is the
+ * input's string value: "" clears the field; numbers must be whole and
+ * non-negative; the date must be an ISO yyyy-mm-dd.
+ */
+export async function updateVehicleInlineField(
+  vehicleId: string,
+  field: InlineEditableField,
+  raw: string
+): Promise<ActionResult> {
+  await requireAdmin();
+  if (!inlineEditableFields.includes(field)) return { error: "Invalid field" };
+
+  const trimmed = raw.trim();
+  let value: number | string | null;
+  if (field === "next_service_date") {
+    if (trimmed === "") value = null;
+    else if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed) && !Number.isNaN(Date.parse(trimmed))) value = trimmed;
+    else return { error: "Enter a valid date" };
+  } else if (trimmed === "") {
+    value = null;
+  } else {
+    const n = Number(trimmed);
+    if (!Number.isInteger(n) || n < 0) return { error: "Enter a whole number, 0 or more" };
+    value = n;
+  }
+
+  const patch =
+    field === "next_service_date"
+      ? { next_service_date: value as string | null }
+      : field === "current_mileage"
+        ? { current_mileage: value as number | null }
+        : { next_service_km: value as number | null };
+
+  const supabase = await createClient();
+  const { error } = await supabase.from("vehicles").update(patch).eq("id", vehicleId);
+
+  if (error) return { error: "Couldn't save the change" };
+
+  revalidatePath("/vehicles");
+  return {};
+}
+
 export async function deleteVehicle(vehicleId: string): Promise<ActionResult> {
   await requireAdmin();
   const supabase = await createClient();
