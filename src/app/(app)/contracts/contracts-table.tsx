@@ -17,7 +17,7 @@ import {
 import { ImageCaptureArea, SelectionActions } from "@/components/ui/selection-actions";
 import { SortableHead } from "@/components/ui/sortable-head";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { StatButtonPill, StatLinkPill } from "@/components/dashboard/stat-pill";
+import { StatButtonPill } from "@/components/dashboard/stat-pill";
 import { formatDisplayDate, isoDaysFromNow } from "@/lib/date-ranges";
 import { exportToExcel, summarizeFilters, type ExportColumn } from "@/lib/export-to-excel";
 import { copyNodeAsImage } from "@/lib/copy-as-image";
@@ -25,7 +25,7 @@ import { useRowSelection } from "@/lib/use-row-selection";
 import { compareNumbers, compareStrings, useTableControls } from "@/lib/use-table-controls";
 import type { ContractStatus, ContractType } from "@/lib/database.types";
 
-import { contractStatusValues, contractTypeValues } from "./schema";
+import { contractStatusValues } from "./schema";
 import { ContractPanel } from "./contract-panel";
 import { DeleteContractButton } from "./delete-contract-button";
 import type { ContractRow, SelectableClient, SelectableVehicle } from "./types";
@@ -52,8 +52,16 @@ const STATUS_LABELS: Record<ContractStatus, string> = {
 const TYPE_LABELS: Record<ContractType, string> = {
   rent_to_own: "Rent-to-own",
   short_term_rental: "Short-term rental",
+  rental: "Rental",
   other: "Other",
 };
+
+/** Cards across the top: each toggles a contract type (several can be on). */
+const TYPE_CARDS: { type: ContractType; label: string; subtitle: string }[] = [
+  { type: "rent_to_own", label: "Contracts", subtitle: "Rent-to-own contracts" },
+  { type: "rental", label: "Rentals", subtitle: "Rental contracts" },
+  { type: "short_term_rental", label: "STR", subtitle: "Short-term rental contracts" },
+];
 
 const STATUS_CHIP_COLORS: Record<ContractStatus, { fill: string; font?: string }> = {
   active: { fill: "FF2F9E58" },
@@ -72,7 +80,6 @@ export function ContractsTable({
   vehicles,
   clients,
   initialEndingSoon,
-  vehicleStatFilters,
   exportedBy,
   canEdit,
 }: {
@@ -80,18 +87,12 @@ export function ContractsTable({
   vehicles: SelectableVehicle[];
   clients: SelectableClient[];
   initialEndingSoon?: boolean;
-  vehicleStatFilters: {
-    fleetCount: number;
-    activeCount: number;
-    idleCount: number;
-    workshopCount: number;
-    servicingDueSoonCount: number;
-  };
   exportedBy: string;
   canEdit: boolean;
 }) {
   const [statusFilter, setStatusFilter] = useState<"all" | ContractStatus>("all");
-  const [typeFilter, setTypeFilter] = useState<"all" | ContractType>("all");
+  // Type cards are multi-select toggles; empty = every type.
+  const [typeFilter, setTypeFilter] = useState<ContractType[]>([]);
   const [endingSoon, setEndingSoon] = useState(initialEndingSoon ?? false);
   // One shared edit panel instead of one per row; keyed per open so its form
   // starts from the contract's current values, and kept mounted after
@@ -122,13 +123,20 @@ export function ContractsTable({
       compareStrings(a.end_date, b.end_date),
   } satisfies Record<SortKey, (a: ContractRow, b: ContractRow) => number>;
 
+  function toggleType(type: ContractType) {
+    setTypeFilter((prev) => (prev.includes(type) ? prev.filter((t) => t !== type) : [...prev, type]));
+  }
+  const typeCounts = Object.fromEntries(
+    TYPE_CARDS.map((card) => [card.type, rows.filter((r) => r.contract_type === card.type).length])
+  ) as Record<ContractType, number>;
+
   const endingSoonCutoff = isoDaysFromNow(90);
   // Matches the preFiltered predicate below exactly, so the pill's count is
   // always what clicking it actually shows.
   const endingSoonCount = rows.filter((r) => r.end_date && r.end_date <= endingSoonCutoff).length;
   const preFiltered = rows
     .filter((r) => statusFilter === "all" || r.status === statusFilter)
-    .filter((r) => typeFilter === "all" || r.contract_type === typeFilter)
+    .filter((r) => typeFilter.length === 0 || typeFilter.includes(r.contract_type))
     .filter((r) => !endingSoon || (r.end_date && r.end_date <= endingSoonCutoff));
 
   const { search, setSearch, sortKey, sortDir, onSort, filteredRows } = useTableControls<
@@ -190,7 +198,7 @@ export function ContractsTable({
       filterSummary: summarizeFilters([
         search && `Search: "${search}"`,
         statusFilter !== "all" && `Status: ${STATUS_LABELS[statusFilter]}`,
-        typeFilter !== "all" && `Type: ${TYPE_LABELS[typeFilter]}`,
+        typeFilter.length > 0 && `Type: ${typeFilter.map((t) => TYPE_LABELS[t]).join(", ")}`,
         endingSoon && "Ending within 3 months",
       ]),
       exportedBy,
@@ -204,43 +212,16 @@ export function ContractsTable({
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h1 className="text-2xl font-semibold tracking-tight">Contracts</h1>
         <div className="flex flex-wrap items-center gap-2">
-          <StatLinkPill
-            label="Fleet"
-            value={vehicleStatFilters.fleetCount}
-            subtitle="Total vehicles"
-            href="/vehicles"
-          />
-          <StatLinkPill
-            label="Active"
-            value={vehicleStatFilters.activeCount}
-            subtitle="On road"
-            href="/vehicles?status=on_road"
-          />
-          <StatLinkPill
-            label="Idle"
-            value={vehicleStatFilters.idleCount}
-            subtitle="Parked"
-            href="/vehicles?status=parked"
-          />
-          <StatLinkPill
-            label="Workshop"
-            value={vehicleStatFilters.workshopCount}
-            subtitle="In repair"
-            href="/vehicles?status=in_repair"
-          />
-          <StatLinkPill
-            label="Servicing"
-            value={vehicleStatFilters.servicingDueSoonCount}
-            subtitle="Due within 30 days"
-            href="/vehicles?service=due_soon"
-          />
-          <StatButtonPill
-            label="Contracts"
-            value={endingSoonCount}
-            subtitle="Ending within 3 months"
-            isActive={endingSoon}
-            onClick={() => setEndingSoon((v) => !v)}
-          />
+          {TYPE_CARDS.map((card) => (
+            <StatButtonPill
+              key={card.type}
+              label={card.label}
+              value={typeCounts[card.type]}
+              subtitle={`${card.subtitle} — click several to combine`}
+              isActive={typeFilter.includes(card.type)}
+              onClick={() => toggleType(card.type)}
+            />
+          ))}
           {canEdit && <ContractPanel vehicles={vehicles} clients={clients} />}
         </div>
       </div>
@@ -265,19 +246,15 @@ export function ContractsTable({
             ))}
           </SelectContent>
         </Select>
-        <Select value={typeFilter} onValueChange={(v) => setTypeFilter(v as "all" | ContractType)}>
-          <SelectTrigger className="bg-background w-48">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All types</SelectItem>
-            {contractTypeValues.map((type) => (
-              <SelectItem key={type} value={type}>
-                {TYPE_LABELS[type]}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <Button
+          type="button"
+          variant={endingSoon ? "default" : "outline"}
+          size="sm"
+          title="Contracts ending within 3 months"
+          onClick={() => setEndingSoon((v) => !v)}
+        >
+          Ending soon ({endingSoonCount})
+        </Button>
         <Button type="button" variant="outline" size="sm" onClick={handleExport}>
           <Download />
           Export

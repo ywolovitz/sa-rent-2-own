@@ -26,7 +26,7 @@ export type VehicleStatus =
   | "end_of_deal";
 export type TrackerStatus = "yes" | "no" | "no_info";
 export type InsuranceClaimStatus = "none" | "pending" | "paid" | "denied";
-export type ContractType = "rent_to_own" | "short_term_rental" | "other";
+export type ContractType = "rent_to_own" | "short_term_rental" | "rental" | "other";
 export type ContractStatus =
   | "active"
   | "completed"

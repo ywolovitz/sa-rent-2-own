@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const contractTypeValues = ["rent_to_own", "short_term_rental", "other"] as const;
+export const contractTypeValues = ["rent_to_own", "short_term_rental", "rental", "other"] as const;
 export const contractStatusValues = [
   "active",
   "completed",

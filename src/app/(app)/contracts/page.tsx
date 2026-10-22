@@ -3,7 +3,6 @@ import { redirect } from "next/navigation";
 import { createClient as createSupabaseServerClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/auth/current-profile";
 import { canEdit, canSeeFinancials, canViewContracts } from "@/lib/auth/permissions";
-import { isoDaysFromNow } from "@/lib/date-ranges";
 
 import { ContractsTable } from "./contracts-table";
 import type { ContractRow, SelectableClient, SelectableVehicle } from "./types";
@@ -45,17 +44,6 @@ export default async function ContractsPage({ searchParams }: PageProps<"/contra
   const vehicleById = new Map((vehicles ?? []).map((v) => [v.id, v]));
   const clientById = new Map((clients ?? []).map((c) => [c.id, c.full_name]));
 
-  const serviceDueCutoff = isoDaysFromNow(30);
-  const vehicleStatFilters = {
-    fleetCount: (vehicles ?? []).length,
-    activeCount: (vehicles ?? []).filter((v) => v.status === "on_road").length,
-    idleCount: (vehicles ?? []).filter((v) => v.status === "parked").length,
-    workshopCount: (vehicles ?? []).filter((v) => v.status === "in_repair").length,
-    servicingDueSoonCount: (vehicles ?? []).filter(
-      (v) => v.next_service_date && v.next_service_date <= serviceDueCutoff
-    ).length,
-  };
-
   const activeVehicleIds = new Set(
     (contracts ?? []).filter((c) => c.status === "active").map((c) => c.vehicle_id)
   );
@@ -91,7 +79,6 @@ export default async function ContractsPage({ searchParams }: PageProps<"/contra
         vehicles={selectableVehicles}
         clients={selectableClients}
         initialEndingSoon={initialEndingSoon}
-        vehicleStatFilters={vehicleStatFilters}
         exportedBy={profile.fullName}
         canEdit={canEdit(profile.role)}
       />

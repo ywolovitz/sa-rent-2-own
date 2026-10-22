@@ -55,6 +55,7 @@ import { ContractPaymentHistorySection } from "./contract-payment-history-sectio
 const CONTRACT_TYPE_LABELS: Record<(typeof contractTypeValues)[number], string> = {
   rent_to_own: "Rent-to-own",
   short_term_rental: "Short-term rental",
+  rental: "Rental",
   other: "Other",
 };
 
