@@ -1,10 +1,11 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { Download } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -13,10 +14,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { ImageCaptureArea, SelectionActions } from "@/components/ui/selection-actions";
 import { SortableHead } from "@/components/ui/sortable-head";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { exportToExcel, summarizeFilters, type ExportColumn } from "@/lib/export-to-excel";
+import { copyNodeAsImage } from "@/lib/copy-as-image";
 import { formatSaPhoneForDisplay } from "@/lib/phone";
+import { useRowSelection } from "@/lib/use-row-selection";
 import { compareStrings, useTableControls } from "@/lib/use-table-controls";
 
 import { DeleteClientButton } from "./delete-client-button";
@@ -40,12 +44,15 @@ const BANKING_CHIP_COLORS = {
 export function ClientsTable({
   rows,
   exportedBy,
+  canEdit,
 }: {
   rows: ClientWithBanking[];
   exportedBy: string;
+  canEdit: boolean;
 }) {
   const [bankingFilter, setBankingFilter] = useState<BankingFilter>("all");
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const captureRef = useRef<HTMLDivElement>(null);
 
   const searchFn = useCallback(
     (row: ClientWithBanking, query: string) =>
@@ -75,6 +82,21 @@ export function ClientsTable({
     sortFns,
     defaultSortKey: "name",
   });
+
+  const {
+    selectedIds,
+    selectedRows,
+    allVisibleSelected,
+    someVisibleSelected,
+    toggleRow,
+    toggleAllVisible,
+    clear: clearSelection,
+  } = useRowSelection(filteredRows, (r) => r.id);
+
+  async function handleCopyAsImage() {
+    if (!captureRef.current || selectedRows.length === 0) return;
+    await copyNodeAsImage(captureRef.current, { count: selectedRows.length, filenamePrefix: "clients" });
+  }
 
   function handleExport() {
     const columns: ExportColumn<ClientWithBanking>[] = [
@@ -126,6 +148,11 @@ export function ClientsTable({
           <Download />
           Export
         </Button>
+        <SelectionActions
+          selectedCount={selectedRows.length}
+          onCopyAsImage={handleCopyAsImage}
+          onClear={clearSelection}
+        />
         <p className="text-muted-foreground text-sm">
           {filteredRows.length === rows.length
             ? `${rows.length} on record`
@@ -135,10 +162,17 @@ export function ClientsTable({
 
       <div className="min-h-0 flex-1 overflow-auto rounded-lg border bg-background">
         <Table containerClassName="overflow-x-visible">
-          <TableHeader className="bg-background sticky top-0 z-10">
+          <TableHeader className="bg-background sticky top-0 z-20">
             <TableRow>
-              <TableHead className="text-muted-foreground sticky left-0 z-20 w-10 border-r bg-muted text-center">
-                #
+              <TableHead className="sticky left-0 z-20 w-20 border-r bg-muted">
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    checked={allVisibleSelected ? true : someVisibleSelected ? "indeterminate" : false}
+                    onCheckedChange={toggleAllVisible}
+                    aria-label="Select all visible rows"
+                  />
+                  <span className="text-muted-foreground flex-1 text-center">#</span>
+                </div>
               </TableHead>
               <SortableHead label="Name" sortKey="name" activeKey={sortKey} direction={sortDir} onSort={onSort} />
               <SortableHead label="Cell number" sortKey="cell" activeKey={sortKey} direction={sortDir} onSort={onSort} />
@@ -160,8 +194,18 @@ export function ClientsTable({
                 className="cursor-pointer"
                 onClick={() => setSelectedId(client.id)}
               >
-                <TableCell className="text-muted-foreground sticky left-0 z-10 border-r bg-background text-center group-hover:bg-muted group-data-[state=selected]:bg-muted">
-                  {index + 1}
+                <TableCell
+                  className="sticky left-0 z-10 w-20 border-r bg-background group-hover:bg-muted group-data-[state=selected]:bg-muted"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div className="flex items-center gap-2">
+                    <Checkbox
+                      checked={selectedIds.has(client.id)}
+                      onCheckedChange={() => toggleRow(client.id)}
+                      aria-label={`Select ${client.full_name}`}
+                    />
+                    <span className="text-muted-foreground flex-1 text-center">{index + 1}</span>
+                  </div>
                 </TableCell>
                 <TableCell className="font-medium">{client.full_name}</TableCell>
                 <TableCell>{formatSaPhoneForDisplay(client.cell_number)}</TableCell>
@@ -179,10 +223,11 @@ export function ClientsTable({
                 >
                   <ClientPanel
                     client={client}
+                    readOnly={!canEdit}
                     open={selectedId === client.id}
                     onOpenChange={(next) => setSelectedId(next ? client.id : null)}
                   />
-                  <DeleteClientButton clientId={client.id} label={client.full_name} />
+                  {canEdit && <DeleteClientButton clientId={client.id} label={client.full_name} />}
                 </TableCell>
               </TableRow>
             ))}
@@ -196,6 +241,29 @@ export function ClientsTable({
           </TableBody>
         </Table>
       </div>
+
+      <ImageCaptureArea captureRef={captureRef}>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Name</TableHead>
+              <TableHead>Cell number</TableHead>
+              <TableHead>ID number</TableHead>
+              <TableHead>Banking</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {selectedRows.map((client) => (
+              <TableRow key={client.id}>
+                <TableCell className="font-medium">{client.full_name}</TableCell>
+                <TableCell>{formatSaPhoneForDisplay(client.cell_number)}</TableCell>
+                <TableCell>{client.id_number ?? "—"}</TableCell>
+                <TableCell>{bankingLabel(client)}</TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </ImageCaptureArea>
     </div>
   );
 }

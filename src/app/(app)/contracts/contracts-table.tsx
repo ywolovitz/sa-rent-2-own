@@ -1,10 +1,11 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { Download } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -13,11 +14,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { ImageCaptureArea, SelectionActions } from "@/components/ui/selection-actions";
 import { SortableHead } from "@/components/ui/sortable-head";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { StatButtonPill, StatLinkPill } from "@/components/dashboard/stat-pill";
 import { formatDisplayDate, isoDaysFromNow } from "@/lib/date-ranges";
 import { exportToExcel, summarizeFilters, type ExportColumn } from "@/lib/export-to-excel";
+import { copyNodeAsImage } from "@/lib/copy-as-image";
+import { useRowSelection } from "@/lib/use-row-selection";
 import { compareNumbers, compareStrings, useTableControls } from "@/lib/use-table-controls";
 import type { ContractStatus, ContractType } from "@/lib/database.types";
 
@@ -70,6 +74,7 @@ export function ContractsTable({
   initialEndingSoon,
   vehicleStatFilters,
   exportedBy,
+  canEdit,
 }: {
   rows: ContractRow[];
   vehicles: SelectableVehicle[];
@@ -83,11 +88,13 @@ export function ContractsTable({
     servicingDueSoonCount: number;
   };
   exportedBy: string;
+  canEdit: boolean;
 }) {
   const [statusFilter, setStatusFilter] = useState<"all" | ContractStatus>("all");
   const [typeFilter, setTypeFilter] = useState<"all" | ContractType>("all");
   const [endingSoon, setEndingSoon] = useState(initialEndingSoon ?? false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const captureRef = useRef<HTMLDivElement>(null);
 
   const searchFn = useCallback(
     (row: ContractRow, query: string) =>
@@ -128,6 +135,21 @@ export function ContractsTable({
     sortFns,
     defaultSortKey: "endDate",
   });
+
+  const {
+    selectedIds,
+    selectedRows,
+    allVisibleSelected,
+    someVisibleSelected,
+    toggleRow,
+    toggleAllVisible,
+    clear: clearSelection,
+  } = useRowSelection(filteredRows, (r) => r.id);
+
+  async function handleCopyAsImage() {
+    if (!captureRef.current || selectedRows.length === 0) return;
+    await copyNodeAsImage(captureRef.current, { count: selectedRows.length, filenamePrefix: "contracts" });
+  }
 
   function handleExport() {
     const columns: ExportColumn<ContractRow>[] = [
@@ -214,7 +236,7 @@ export function ContractsTable({
             isActive={endingSoon}
             onClick={() => setEndingSoon((v) => !v)}
           />
-          <ContractPanel vehicles={vehicles} clients={clients} />
+          {canEdit && <ContractPanel vehicles={vehicles} clients={clients} />}
         </div>
       </div>
 
@@ -255,6 +277,11 @@ export function ContractsTable({
           <Download />
           Export
         </Button>
+        <SelectionActions
+          selectedCount={selectedRows.length}
+          onCopyAsImage={handleCopyAsImage}
+          onClear={clearSelection}
+        />
         <p className="text-muted-foreground text-sm">
           {filteredRows.length === rows.length
             ? `${rows.length} on record`
@@ -264,10 +291,17 @@ export function ContractsTable({
 
       <div className="min-h-0 flex-1 overflow-auto rounded-lg border bg-background">
         <Table containerClassName="overflow-x-visible">
-          <TableHeader className="bg-background sticky top-0 z-10">
+          <TableHeader className="bg-background sticky top-0 z-20">
             <TableRow>
-              <TableHead className="text-muted-foreground sticky left-0 z-20 w-10 border-r bg-muted text-center">
-                #
+              <TableHead className="sticky left-0 z-20 w-20 border-r bg-muted">
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    checked={allVisibleSelected ? true : someVisibleSelected ? "indeterminate" : false}
+                    onCheckedChange={toggleAllVisible}
+                    aria-label="Select all visible rows"
+                  />
+                  <span className="text-muted-foreground flex-1 text-center">#</span>
+                </div>
               </TableHead>
               <SortableHead label="Deal number" sortKey="deal" activeKey={sortKey} direction={sortDir} onSort={onSort} />
               <SortableHead label="Vehicle" sortKey="vehicle" activeKey={sortKey} direction={sortDir} onSort={onSort} />
@@ -299,8 +333,18 @@ export function ContractsTable({
                 className="cursor-pointer"
                 onClick={() => setSelectedId(row.id)}
               >
-                <TableCell className="text-muted-foreground sticky left-0 z-10 border-r bg-background text-center group-hover:bg-muted group-data-[state=selected]:bg-muted">
-                  {index + 1}
+                <TableCell
+                  className="sticky left-0 z-10 w-20 border-r bg-background group-hover:bg-muted group-data-[state=selected]:bg-muted"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div className="flex items-center gap-2">
+                    <Checkbox
+                      checked={selectedIds.has(row.id)}
+                      onCheckedChange={() => toggleRow(row.id)}
+                      aria-label={`Select ${row.deal_number ?? row.vehicleLabel}`}
+                    />
+                    <span className="text-muted-foreground flex-1 text-center">{index + 1}</span>
+                  </div>
                 </TableCell>
                 <TableCell>{row.deal_number ?? "—"}</TableCell>
                 <TableCell className="font-medium">{row.vehicleLabel}</TableCell>
@@ -328,10 +372,12 @@ export function ContractsTable({
                     contract={row}
                     vehicles={vehicles}
                     clients={clients}
+                    readOnly={!canEdit}
+                    showPrices={canEdit}
                     open={selectedId === row.id}
                     onOpenChange={(next) => setSelectedId(next ? row.id : null)}
                   />
-                  <DeleteContractButton contractId={row.id} label={row.vehicleLabel} />
+                  {canEdit && <DeleteContractButton contractId={row.id} label={row.vehicleLabel} />}
                 </TableCell>
               </TableRow>
             ))}
@@ -345,6 +391,39 @@ export function ContractsTable({
           </TableBody>
         </Table>
       </div>
+
+      <ImageCaptureArea captureRef={captureRef}>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Deal number</TableHead>
+              <TableHead>Vehicle</TableHead>
+              <TableHead>Client</TableHead>
+              <TableHead>Type</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead>Installment</TableHead>
+              <TableHead>Arrears</TableHead>
+              <TableHead>End date</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {selectedRows.map((row) => (
+              <TableRow key={row.id}>
+                <TableCell>{row.deal_number ?? "—"}</TableCell>
+                <TableCell className="font-medium">{row.vehicleLabel}</TableCell>
+                <TableCell>{row.clientName}</TableCell>
+                <TableCell className="capitalize">{row.contract_type.replace(/_/g, " ")}</TableCell>
+                <TableCell>{STATUS_LABELS[row.status]}</TableCell>
+                <TableCell>
+                  {row.installment_amount ? `R${row.installment_amount.toLocaleString()}` : "—"}
+                </TableCell>
+                <TableCell>{row.arrears_amount > 0 ? `R${row.arrears_amount.toLocaleString()}` : "—"}</TableCell>
+                <TableCell>{formatDisplayDate(row.end_date)}</TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </ImageCaptureArea>
     </div>
   );
 }

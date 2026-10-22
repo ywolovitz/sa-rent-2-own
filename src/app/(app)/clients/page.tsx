@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 
 import { createClient as createSupabaseServerClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/auth/current-profile";
+import { canEdit, canViewContracts } from "@/lib/auth/permissions";
 
 import { ClientPanel } from "./client-panel";
 import { ClientsTable } from "./clients-table";
@@ -9,7 +10,7 @@ import type { ClientWithBanking } from "./types";
 
 export default async function ClientsPage() {
   const profile = await getCurrentProfile();
-  if (!profile || (profile.role !== "admin" && profile.role !== "manager")) {
+  if (!profile || !canViewContracts(profile.role)) {
     redirect("/");
   }
 
@@ -48,10 +49,10 @@ export default async function ClientsPage() {
     <div className="flex h-full min-h-0 flex-col gap-4">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold tracking-tight">Clients</h1>
-        <ClientPanel />
+        {canEdit(profile.role) && <ClientPanel />}
       </div>
 
-      <ClientsTable rows={rows} exportedBy={profile.fullName} />
+      <ClientsTable rows={rows} exportedBy={profile.fullName} canEdit={canEdit(profile.role)} />
     </div>
   );
 }

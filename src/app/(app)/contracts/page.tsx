@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 
 import { createClient as createSupabaseServerClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/auth/current-profile";
+import { canEdit, canSeeFinancials, canViewContracts } from "@/lib/auth/permissions";
 import { isoDaysFromNow } from "@/lib/date-ranges";
 
 import { ContractsTable } from "./contracts-table";
@@ -16,7 +17,7 @@ export default async function ContractsPage({ searchParams }: PageProps<"/contra
   const initialEndingSoon = firstParam(params.ending) === "soon";
 
   const profile = await getCurrentProfile();
-  if (!profile || (profile.role !== "admin" && profile.role !== "manager")) {
+  if (!profile || !canViewContracts(profile.role)) {
     redirect("/");
   }
 
@@ -68,10 +69,16 @@ export default async function ContractsPage({ searchParams }: PageProps<"/contra
     label: c.full_name,
   }));
 
+  // Fleet Managers must not see prices — null them here, server-side, so
+  // the values are never sent to their browser.
+  const showPrices = canSeeFinancials(profile.role);
+
   const rows: ContractRow[] = (contracts ?? []).map((c) => {
     const vehicle = vehicleById.get(c.vehicle_id);
     return {
       ...c,
+      purchase_price: showPrices ? c.purchase_price : null,
+      potential_sale_price: showPrices ? c.potential_sale_price : null,
       vehicleLabel: vehicle ? vehicleLabel(vehicle) : "Unknown vehicle",
       clientName: clientById.get(c.client_id) ?? "Unknown client",
     };
@@ -86,6 +93,7 @@ export default async function ContractsPage({ searchParams }: PageProps<"/contra
         initialEndingSoon={initialEndingSoon}
         vehicleStatFilters={vehicleStatFilters}
         exportedBy={profile.fullName}
+        canEdit={canEdit(profile.role)}
       />
     </div>
   );

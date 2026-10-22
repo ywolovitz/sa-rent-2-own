@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/auth/current-profile";
+import { canEdit, canSeeFinancials, canViewContracts } from "@/lib/auth/permissions";
 import { isoDaysFromNow } from "@/lib/date-ranges";
 import type { PaymentMethod } from "@/lib/database.types";
 import { vehicleStatusValues } from "./schema";
@@ -19,7 +20,11 @@ export default async function VehiclesPage({ searchParams }: PageProps<"/vehicle
   const initialContractEndingSoon = firstParam(params.contract) === "ending_soon";
 
   const [profile, supabase] = await Promise.all([getCurrentProfile(), createClient()]);
-  const canManage = profile?.role === "admin" || profile?.role === "manager";
+  // canManage = edit rights (admin only); contract columns are visible to
+  // Fleet Managers too; prices are admin-only and stripped below.
+  const canManage = canEdit(profile?.role);
+  const canSeeContracts = canViewContracts(profile?.role);
+  const canSeePrices = canSeeFinancials(profile?.role);
 
   interface ActiveContractRow {
     vehicle_id: string;
@@ -51,7 +56,7 @@ export default async function VehiclesPage({ searchParams }: PageProps<"/vehicle
         )
         .order("file_no"),
       supabase.from("vehicle_registrations").select("vehicle_id, plate_number").is("effective_to", null),
-      canManage
+      canSeeContracts
         ? supabase
             .from("contracts")
             .select(
@@ -59,10 +64,10 @@ export default async function VehiclesPage({ searchParams }: PageProps<"/vehicle
             )
             .eq("status", "active")
         : Promise.resolve({ data: [] as ActiveContractRow[] }),
-      canManage
+      canSeeContracts
         ? supabase.from("contracts").select("vehicle_id, client_id").neq("status", "active")
         : Promise.resolve({ data: [] as PastContractRow[] }),
-      canManage
+      canSeeContracts
         ? supabase.from("clients").select("id, full_name, cell_number")
         : Promise.resolve({ data: [] as { id: string; full_name: string; cell_number: string }[] }),
     ]);
@@ -97,8 +102,8 @@ export default async function VehiclesPage({ searchParams }: PageProps<"/vehicle
       current_contract_end_date: activeContract?.end_date ?? null,
       current_installment_amount: activeContract?.installment_amount ?? null,
       current_payment_method: activeContract?.payment_method ?? null,
-      current_potential_sale_price: activeContract?.potential_sale_price ?? null,
-      current_purchase_price: activeContract?.purchase_price ?? null,
+      current_potential_sale_price: canSeePrices ? (activeContract?.potential_sale_price ?? null) : null,
+      current_purchase_price: canSeePrices ? (activeContract?.purchase_price ?? null) : null,
       current_total_collected: activeContract?.total_collected ?? null,
       current_residual_value: activeContract?.residual_value ?? null,
       current_is_paid_up: activeContract?.is_paid_up ?? null,
@@ -111,6 +116,8 @@ export default async function VehiclesPage({ searchParams }: PageProps<"/vehicle
       <VehiclesTable
         rows={rows}
         canManage={canManage}
+        canViewContracts={canSeeContracts}
+        canSeePrices={canSeePrices}
         initialStatus={initialStatus}
         initialServiceDueSoon={initialServiceDueSoon}
         initialContractEndingSoon={initialContractEndingSoon}

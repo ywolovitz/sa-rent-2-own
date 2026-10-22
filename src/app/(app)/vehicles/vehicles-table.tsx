@@ -15,13 +15,13 @@ import {
   horizontalListSortingStrategy,
   sortableKeyboardCoordinates,
 } from "@dnd-kit/sortable";
-import { toBlob } from "html-to-image";
-import { Download, ImageDown, Pencil } from "lucide-react";
+import { Download, Pencil } from "lucide-react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { ImageCaptureArea, SelectionActions } from "@/components/ui/selection-actions";
 import { ColumnVisibilityMenu } from "@/components/ui/column-visibility-menu";
 import { DraggableTableHead } from "@/components/ui/draggable-table-head";
 import { Input } from "@/components/ui/input";
@@ -38,6 +38,8 @@ import { daysUntil, formatDayCount, formatDisplayDate, isoDaysFromNow } from "@/
 import { dueDateColorScale, dueDateExcelChip } from "@/lib/due-date-color";
 import { exportToExcel, summarizeFilters, type ExportColumn } from "@/lib/export-to-excel";
 import { useColumnOrder } from "@/lib/use-column-order";
+import { copyNodeAsImage } from "@/lib/copy-as-image";
+import { useRowSelection } from "@/lib/use-row-selection";
 import { compareNumbers, compareStrings, useTableControls } from "@/lib/use-table-controls";
 import { formatSaPhoneForDisplay } from "@/lib/phone";
 import {
@@ -430,6 +432,9 @@ const COLUMN_LABELS: Record<ColumnId, string> = {
   paidUp: "Paid",
 };
 
+/** Hidden from everyone but admins — also stripped server-side in page.tsx. */
+const PRICE_COLUMNS = new Set<ColumnId>(["potentialSalePrice", "purchasePrice"]);
+
 const MANAGER_ONLY_COLUMNS = new Set<ColumnId>([
   "client",
   "monthsLeft",
@@ -601,6 +606,8 @@ function exportValue(column: ColumnId, vehicle: VehicleWithRegistration): string
 export function VehiclesTable({
   rows,
   canManage,
+  canViewContracts,
+  canSeePrices,
   initialStatus,
   initialServiceDueSoon,
   initialContractEndingSoon,
@@ -608,7 +615,12 @@ export function VehiclesTable({
   exportedBy,
 }: {
   rows: VehicleWithRegistration[];
+  /** Create/edit/delete (admin only). */
   canManage: boolean;
+  /** See the client/contract columns (admin + Fleet Manager). */
+  canViewContracts: boolean;
+  /** See purchase / potential sale price (admin only). */
+  canSeePrices: boolean;
   initialStatus?: VehicleStatus;
   initialServiceDueSoon?: boolean;
   initialContractEndingSoon?: boolean;
@@ -623,7 +635,6 @@ export function VehiclesTable({
   const [serviceUpcoming, setServiceUpcoming] = useState(initialServiceDueSoon ?? false);
   const [contractEndingSoon, setContractEndingSoon] = useState(initialContractEndingSoon ?? false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const captureRef = useRef<HTMLDivElement>(null);
 
   // Status, service overdue/upcoming, and "contract ending" are presented
@@ -689,12 +700,13 @@ export function VehiclesTable({
     }
   }
 
+  const isColumnAllowed = (id: ColumnId) =>
+    (!MANAGER_ONLY_COLUMNS.has(id) || canViewContracts) && (!PRICE_COLUMNS.has(id) || canSeePrices);
+
   const visibleColumns = order.filter(
-    (id) => !isHidden(id) && (!MANAGER_ONLY_COLUMNS.has(id) || canManage)
+    (id) => !isHidden(id) && isColumnAllowed(id)
   );
-  const toggleableColumns = DEFAULT_COLUMN_ORDER.filter(
-    (id) => !MANAGER_ONLY_COLUMNS.has(id) || canManage
-  ).map((id) => ({ id, label: COLUMN_LABELS[id] }));
+  const toggleableColumns = DEFAULT_COLUMN_ORDER.filter(isColumnAllowed).map((id) => ({ id, label: COLUMN_LABELS[id] }));
 
   const searchFn = useCallback(
     (row: VehicleWithRegistration, query: string) =>
@@ -832,81 +844,19 @@ export function VehiclesTable({
   ]);
   const NUMBER_COLUMNS = new Set<ColumnId>(["currentMileage", "nextServiceKm"]);
 
-  function toggleRowSelected(id: string) {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }
-
-  const allVisibleSelected = filteredRows.length > 0 && filteredRows.every((r) => selectedIds.has(r.id));
-  const someVisibleSelected = filteredRows.some((r) => selectedIds.has(r.id));
-
-  function toggleSelectAllVisible() {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (allVisibleSelected) {
-        filteredRows.forEach((r) => next.delete(r.id));
-      } else {
-        filteredRows.forEach((r) => next.add(r.id));
-      }
-      return next;
-    });
-  }
-
-  const selectedRows = filteredRows.filter((r) => selectedIds.has(r.id));
+  const {
+    selectedIds,
+    selectedRows,
+    allVisibleSelected,
+    someVisibleSelected,
+    toggleRow: toggleRowSelected,
+    toggleAllVisible: toggleSelectAllVisible,
+    clear: clearSelection,
+  } = useRowSelection(filteredRows, (r) => r.id);
 
   async function handleCopyAsImage() {
     if (!captureRef.current || selectedRows.length === 0) return;
-    const count = selectedRows.length;
-    let blob: Blob | null;
-    try {
-      // html-to-image sizes its output from the capture node's own
-      // scrollWidth/Height, but that div has no overflow style of its own
-      // (default "visible"), so its scrollWidth just reports its own box
-      // width rather than the wide <table> overflowing inside it — the
-      // table itself is what actually has the real content width.
-      const node = captureRef.current;
-      const table = node.querySelector("table");
-      const width = table?.scrollWidth ?? node.scrollWidth;
-      const height = table?.scrollHeight ?? node.scrollHeight;
-      blob = await toBlob(node, {
-        backgroundColor: "#ffffff",
-        pixelRatio: 2,
-        width,
-        height,
-        // Forces the cloned node itself to the real width as an inline
-        // style — without this, the clone can still reflow/wrap narrower
-        // than the live DOM, even with width/height set above.
-        style: { width: `${width}px`, minWidth: `${width}px` },
-      });
-    } catch {
-      toast.error("Couldn't create the image");
-      return;
-    }
-    if (!blob) {
-      toast.error("Couldn't create the image");
-      return;
-    }
-    try {
-      await navigator.clipboard.write([new ClipboardItem({ [blob.type]: blob })]);
-      toast.success(`Copied ${count} row${count === 1 ? "" : "s"} as an image — paste it into WhatsApp`);
-    } catch {
-      // Clipboard image writes aren't supported in every browser — fall back to a download.
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `vehicles-selection-${Date.now()}.png`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
-      toast.success(
-        `Downloaded an image of ${count} row${count === 1 ? "" : "s"} (clipboard copy isn't supported in this browser)`
-      );
-    }
+    await copyNodeAsImage(captureRef.current, { count: selectedRows.length, filenamePrefix: "vehicles" });
   }
 
   function handleExport() {
@@ -1034,7 +984,7 @@ export function VehiclesTable({
             ))}
           </SelectContent>
         </Select>
-        {canManage && (
+        {canViewContracts && (
           <Button
             type="button"
             variant={contractEndingSoon ? "default" : "outline"}
@@ -1054,21 +1004,11 @@ export function VehiclesTable({
           <Download />
           Export
         </Button>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={handleCopyAsImage}
-          disabled={selectedRows.length === 0}
-        >
-          <ImageDown />
-          Copy as image
-        </Button>
-        {selectedRows.length > 0 && (
-          <Button type="button" variant="ghost" size="sm" onClick={() => setSelectedIds(new Set())}>
-            Clear {selectedRows.length} selected
-          </Button>
-        )}
+        <SelectionActions
+          selectedCount={selectedRows.length}
+          onCopyAsImage={handleCopyAsImage}
+          onClear={clearSelection}
+        />
         <p className="text-muted-foreground text-sm">
           {filteredRows.length === rows.length
             ? `${rows.length} in the fleet`
@@ -1084,7 +1024,7 @@ export function VehiclesTable({
           onDragEnd={handleDragEnd}
         >
           <Table containerClassName="overflow-x-visible">
-            <TableHeader className="bg-background sticky top-0 z-10">
+            <TableHeader className="bg-background sticky top-0 z-20">
               <TableRow>
                 <TableHead className="sticky left-0 z-20 w-20 border-r bg-muted">
                   <div className="flex items-center gap-2">
@@ -1171,12 +1111,7 @@ export function VehiclesTable({
         </DndContext>
       </div>
 
-      {/* Table captured as an image by "Copy as image" — kept fully
-          rendered (not display:none, not positioned off-screen, both of
-          which stop some browsers from ever painting it) and clipped to
-          nothing by a zero-height, overflow-hidden ancestor instead. */}
-      <div style={{ height: 0, overflow: "hidden" }} aria-hidden="true">
-        <div ref={captureRef} style={{ width: "max-content" }}>
+      <ImageCaptureArea captureRef={captureRef}>
           <Table>
             <TableHeader>
               <TableRow>
@@ -1197,8 +1132,7 @@ export function VehiclesTable({
               ))}
             </TableBody>
           </Table>
-        </div>
-      </div>
+      </ImageCaptureArea>
     </div>
   );
 }

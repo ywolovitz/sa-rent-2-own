@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 
 import { createClient as createSupabaseServerClient } from "@/lib/supabase/server";
-import { requireManagerOrAdmin } from "@/lib/auth/require-role";
+import { requireAdmin } from "@/lib/auth/require-role";
 import { syncVehicleAssignment } from "@/lib/vehicle-assignments";
 import { contractFormSchema, type ContractFormValues } from "./schema";
 
@@ -105,7 +105,7 @@ function friendlyInsertError(error: { code?: string; message: string }): string 
 }
 
 export async function createContract(raw: ContractFormValues): Promise<ActionResult> {
-  await requireManagerOrAdmin();
+  await requireAdmin();
   const parsed = contractFormSchema.safeParse(raw);
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "Invalid input" };
@@ -135,7 +135,7 @@ export async function updateContract(
   contractId: string,
   raw: ContractFormValues
 ): Promise<ActionResult> {
-  await requireManagerOrAdmin();
+  await requireAdmin();
   const parsed = contractFormSchema.safeParse(raw);
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "Invalid input" };
@@ -163,7 +163,7 @@ export async function updateContract(
 }
 
 export async function deleteContract(contractId: string): Promise<ActionResult> {
-  await requireManagerOrAdmin();
+  await requireAdmin();
   const supabase = await createSupabaseServerClient();
   const { error } = await supabase.from("contracts").delete().eq("id", contractId);
 

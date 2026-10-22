@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 
 import { createClient as createSupabaseServerClient } from "@/lib/supabase/server";
-import { requireManagerOrAdmin } from "@/lib/auth/require-role";
+import { requireAdmin } from "@/lib/auth/require-role";
 import { encryptField, decryptField, lastFour } from "@/lib/crypto";
 import { clientFormSchema, type ClientFormValues } from "./schema";
 
@@ -69,7 +69,7 @@ async function upsertBankingDetailsIfProvided(
 }
 
 export async function createClient(raw: ClientFormValues): Promise<ActionResult> {
-  const profile = await requireManagerOrAdmin();
+  const profile = await requireAdmin();
   const parsed = clientFormSchema.safeParse(raw);
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "Invalid input" };
@@ -105,7 +105,7 @@ export async function updateClient(
   clientId: string,
   raw: ClientFormValues
 ): Promise<ActionResult> {
-  const profile = await requireManagerOrAdmin();
+  const profile = await requireAdmin();
   const parsed = clientFormSchema.safeParse(raw);
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "Invalid input" };
@@ -137,7 +137,7 @@ export async function updateClient(
 }
 
 export async function deleteClient(clientId: string): Promise<ActionResult> {
-  await requireManagerOrAdmin();
+  await requireAdmin();
   const supabase = await createSupabaseServerClient();
   const { error } = await supabase.from("clients").delete().eq("id", clientId);
 
@@ -164,7 +164,7 @@ export interface RevealedBankingDetails {
 export async function revealBankingDetails(
   clientId: string
 ): Promise<{ data?: RevealedBankingDetails; error?: string }> {
-  const profile = await requireManagerOrAdmin();
+  const profile = await requireAdmin();
   const supabase = await createSupabaseServerClient();
 
   const { data: row, error } = await supabase

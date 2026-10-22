@@ -33,6 +33,9 @@ export interface ContractMonthlyReportRow {
   dealNumber: string | null;
   clientName: string;
   reg: string | null;
+  vehicleId: string | null;
+  /** The contract's outstanding balance (contracts.outstanding_balance) — admin only, null for Fleet Managers. */
+  outstandingBalance: number | null;
   paymentMethod: string;
   months: MonthlyReportCell[];
   missedCount: number;
@@ -44,6 +47,7 @@ export interface PaymentTransactionRow {
   dealNumber: string | null;
   clientName: string;
   reg: string | null;
+  vehicleId: string | null;
   type: "receipt" | "debit_note";
   reference: string;
   invoiceReference: string;

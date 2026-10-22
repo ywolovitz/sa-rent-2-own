@@ -1,4 +1,5 @@
 import { getCurrentProfile } from "@/lib/auth/current-profile";
+import { canSeeFinancials, canViewContracts } from "@/lib/auth/permissions";
 import { FleetStatsCards } from "@/components/dashboard/fleet-stats-cards";
 import { FleetMapPlaceholder } from "@/components/dashboard/fleet-map-placeholder";
 import { FleetValueChart } from "@/components/dashboard/fleet-value-chart";
@@ -7,7 +8,8 @@ import { FleetDeadlinesChart } from "@/components/dashboard/fleet-deadlines-char
 
 export default async function DashboardPage() {
   const profile = await getCurrentProfile();
-  const canManage = profile?.role === "admin" || profile?.role === "manager";
+  const canSeeContracts = canViewContracts(profile?.role);
+  const canSeeFleetValue = canSeeFinancials(profile?.role);
 
   return (
     <div className="flex flex-col gap-6">
@@ -23,11 +25,11 @@ export default async function DashboardPage() {
           <FleetMapPlaceholder />
         </div>
         <div className="flex flex-col gap-4 lg:w-1/3">
-          {canManage && <FleetValueChart />}
+          {canSeeFleetValue && <FleetValueChart />}
           <FleetStatusPieChart />
         </div>
       </div>
-      {canManage && <FleetDeadlinesChart />}
+      {canSeeContracts && <FleetDeadlinesChart />}
     </div>
   );
 }

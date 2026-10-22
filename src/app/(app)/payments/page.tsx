@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 
 import { createClient as createSupabaseServerClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/auth/current-profile";
+import { canSeeFinancials, canViewContracts } from "@/lib/auth/permissions";
 import type { PaymentTransactionType } from "@/lib/database.types";
 
 import { PaymentsViewSwitcher } from "./view-switcher";
@@ -102,13 +103,17 @@ function monthKeyMinus(key: string, n: number): string {
 
 export default async function PaymentsPage() {
   const profile = await getCurrentProfile();
-  if (!profile || (profile.role !== "admin" && profile.role !== "manager")) {
+  if (!profile || !canViewContracts(profile.role)) {
     redirect("/");
   }
+  // Fleet Managers get a trimmed view: no Dashboard tab, no "Cash"
+  // payments, no outstanding balances. All of that is dropped here on the
+  // server so none of it is ever sent to their browser.
+  const showFinancials = canSeeFinancials(profile.role);
 
   const supabase = await createSupabaseServerClient();
 
-  const [transactions, { data: contracts }, { data: clients }, { data: registrations }] = await Promise.all([
+  const [allTransactions, { data: contracts }, { data: clients }, { data: registrations }] = await Promise.all([
     fetchAllTransactions(supabase),
     supabase
       .from("contracts")
@@ -116,6 +121,11 @@ export default async function PaymentsPage() {
     supabase.from("clients").select("id, full_name"),
     supabase.from("vehicle_registrations").select("vehicle_id, plate_number").is("effective_to", null),
   ]);
+
+  const cashContractIds = new Set((contracts ?? []).filter((c) => c.payment_method === "cash").map((c) => c.id));
+  const transactions = showFinancials
+    ? allTransactions
+    : allTransactions.filter((t) => !cashContractIds.has(t.contract_id));
 
   const dealNumberByContract = new Map((contracts ?? []).map((c) => [c.id, c.deal_number]));
   const clientIdByContract = new Map((contracts ?? []).map((c) => [c.id, c.client_id]));
@@ -219,6 +229,8 @@ export default async function PaymentsPage() {
       dealNumber: dealNumberByContract.get(contractId) ?? null,
       clientName: clientNameById.get(clientIdByContract.get(contractId) ?? "") ?? "Unknown client",
       reg: plateByVehicle.get(vehicleIdByContract.get(contractId) ?? "") ?? null,
+      vehicleId: vehicleIdByContract.get(contractId) ?? null,
+      outstandingBalance: showFinancials ? (outstandingBalanceByContract.get(contractId) ?? null) : null,
       paymentMethod: paymentMethodByContract.get(contractId) ?? "other",
       months,
       missedCount,
@@ -235,6 +247,7 @@ export default async function PaymentsPage() {
     dealNumber: dealNumberByContract.get(t.contract_id) ?? null,
     clientName: clientNameById.get(clientIdByContract.get(t.contract_id) ?? "") ?? "Unknown client",
     reg: plateByVehicle.get(vehicleIdByContract.get(t.contract_id) ?? "") ?? null,
+    vehicleId: vehicleIdByContract.get(t.contract_id) ?? null,
     type: t.type,
     reference: t.reference,
     invoiceReference: t.invoice_reference,
@@ -244,24 +257,18 @@ export default async function PaymentsPage() {
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-4">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Payments</h1>
-        <p className="text-muted-foreground text-sm">
-          Debit-order payment history, backfilled from the legacy system&apos;s ledger.
-        </p>
-      </div>
-
       <PaymentsViewSwitcher
+        showFinancials={showFinancials}
         reportRows={reportRows}
         monthLabels={monthLabels}
-        summaryRows={summaryRows}
+        summaryRows={showFinancials ? summaryRows : []}
         transactionRows={transactionRows}
-        monthlyData={monthlyData}
-        netCollected={netCollected}
-        lastMonthLabel={lastMonthLabel}
-        lastMonthNetCollected={lastMonthNetCollected}
-        contractsInArrears={contractsInArrears}
-        contractsTracked={summaryRows.length}
+        monthlyData={showFinancials ? monthlyData : []}
+        netCollected={showFinancials ? netCollected : 0}
+        lastMonthLabel={showFinancials ? lastMonthLabel : null}
+        lastMonthNetCollected={showFinancials ? lastMonthNetCollected : 0}
+        contractsInArrears={showFinancials ? contractsInArrears : 0}
+        contractsTracked={showFinancials ? summaryRows.length : 0}
         exportedBy={profile.fullName}
       />
     </div>

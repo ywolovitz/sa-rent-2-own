@@ -125,12 +125,18 @@ export function ContractPanel({
   contract,
   vehicles,
   clients,
+  readOnly = false,
+  showPrices = true,
   open: openProp,
   onOpenChange: onOpenChangeProp,
 }: {
   contract?: ContractWithDetails;
   vehicles: SelectableVehicle[];
   clients: SelectableClient[];
+  /** View-only (Fleet Manager): fields disabled, no Save. */
+  readOnly?: boolean;
+  /** Purchase / potential sale price inputs — hidden from Fleet Managers. */
+  showPrices?: boolean;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
 }) {
@@ -195,11 +201,12 @@ export function ContractPanel({
       )}
       <SheetContent>
         <SheetHeader>
-          <SheetTitle>{isEditing ? "Edit contract" : "Add contract"}</SheetTitle>
+          <SheetTitle>{readOnly ? "Contract details" : isEditing ? "Edit contract" : "Add contract"}</SheetTitle>
         </SheetHeader>
         <SheetBody>
           <Form {...form}>
             <form id="contract-form" onSubmit={form.handleSubmit(onSubmit)} className="contents">
+            <fieldset disabled={readOnly} className="contents">
             <section className="grid gap-4 sm:grid-cols-2">
               <h3 className="text-muted-foreground col-span-full text-xs font-semibold tracking-wide uppercase">
                 Deal
@@ -510,6 +517,7 @@ export function ContractPanel({
                   </FormItem>
                 )}
               />
+              {showPrices && (
               <FormField
                 control={form.control}
                 name="purchasePrice"
@@ -523,6 +531,8 @@ export function ContractPanel({
                   </FormItem>
                 )}
               />
+              )}
+              {showPrices && (
               <FormField
                 control={form.control}
                 name="potentialSalePrice"
@@ -536,6 +546,7 @@ export function ContractPanel({
                   </FormItem>
                 )}
               />
+              )}
               <FormField
                 control={form.control}
                 name="salePrice"
@@ -616,6 +627,7 @@ export function ContractPanel({
               )}
             />
 
+            </fieldset>
             </form>
           </Form>
 
@@ -628,11 +640,13 @@ export function ContractPanel({
             </>
           )}
         </SheetBody>
-        <SheetFooter>
-          <Button type="submit" form="contract-form" disabled={isPending}>
-            {isPending ? "Saving…" : "Save"}
-          </Button>
-        </SheetFooter>
+        {!readOnly && (
+          <SheetFooter>
+            <Button type="submit" form="contract-form" disabled={isPending}>
+              {isPending ? "Saving…" : "Save"}
+            </Button>
+          </SheetFooter>
+        )}
       </SheetContent>
     </Sheet>
   );

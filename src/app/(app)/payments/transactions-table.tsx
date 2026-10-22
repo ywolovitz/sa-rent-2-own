@@ -1,10 +1,11 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { Download } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -13,10 +14,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { ImageCaptureArea, SelectionActions } from "@/components/ui/selection-actions";
 import { SortableHead } from "@/components/ui/sortable-head";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { RegButton, VehicleDetailsDialog } from "@/components/vehicle-details-dialog";
+import { copyNodeAsImage } from "@/lib/copy-as-image";
 import { formatDisplayDate } from "@/lib/date-ranges";
 import { exportToExcel, summarizeFilters, type ExportColumn } from "@/lib/export-to-excel";
+import { useRowSelection } from "@/lib/use-row-selection";
 import { compareNumbers, compareStrings, useTableControls } from "@/lib/use-table-controls";
 
 import type { PaymentTransactionRow } from "./types";
@@ -30,6 +35,11 @@ function formatRand(amount: number): string {
   return new Intl.NumberFormat("en-ZA", { style: "currency", currency: "ZAR" }).format(amount);
 }
 
+function statusLabel(row: PaymentTransactionRow): string {
+  if (row.type === "debit_note") return "Reversal";
+  return row.reversed ? "Reversed" : "Cleared";
+}
+
 function StatusBadge({ row }: { row: PaymentTransactionRow }) {
   if (row.type === "debit_note") return <Badge variant="outline">Reversal</Badge>;
   return row.reversed ? <Badge variant="destructive">Reversed</Badge> : <Badge variant="success">Cleared</Badge>;
@@ -37,6 +47,8 @@ function StatusBadge({ row }: { row: PaymentTransactionRow }) {
 
 export function TransactionsTable({ rows, exportedBy }: { rows: PaymentTransactionRow[]; exportedBy: string }) {
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
+  const [openVehicle, setOpenVehicle] = useState<{ id: string; reg: string | null } | null>(null);
+  const captureRef = useRef<HTMLDivElement>(null);
 
   const searchFn = useCallback(
     (row: PaymentTransactionRow, query: string) =>
@@ -68,6 +80,21 @@ export function TransactionsTable({ rows, exportedBy }: { rows: PaymentTransacti
     defaultSortKey: "date",
     storageKey: "payments-transactions-sort",
   });
+
+  const {
+    selectedIds,
+    selectedRows,
+    allVisibleSelected,
+    someVisibleSelected,
+    toggleRow,
+    toggleAllVisible,
+    clear: clearSelection,
+  } = useRowSelection(filteredRows, (r) => r.id);
+
+  async function handleCopyAsImage() {
+    if (!captureRef.current || selectedRows.length === 0) return;
+    await copyNodeAsImage(captureRef.current, { count: selectedRows.length, filenamePrefix: "transactions" });
+  }
 
   function handleExport() {
     const columns: ExportColumn<PaymentTransactionRow>[] = [
@@ -128,13 +155,28 @@ export function TransactionsTable({ rows, exportedBy }: { rows: PaymentTransacti
             <Download />
             Export
           </Button>
+          <SelectionActions
+            selectedCount={selectedRows.length}
+            onCopyAsImage={handleCopyAsImage}
+            onClear={clearSelection}
+          />
         </div>
       </div>
 
       <div className="min-h-0 flex-1 overflow-auto rounded-md border">
         <Table containerClassName="overflow-x-visible">
-          <TableHeader className="bg-background sticky top-0 z-10">
+          <TableHeader className="bg-background sticky top-0 z-20">
             <TableRow>
+              <TableHead className="sticky left-0 z-20 w-20 border-r bg-muted">
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    checked={allVisibleSelected ? true : someVisibleSelected ? "indeterminate" : false}
+                    onCheckedChange={toggleAllVisible}
+                    aria-label="Select all visible rows"
+                  />
+                  <span className="text-muted-foreground flex-1 text-center">#</span>
+                </div>
+              </TableHead>
               <SortableHead label="Date" sortKey="date" activeKey={sortKey} direction={sortDir} onSort={onSort} />
               <SortableHead label="Deal number" sortKey="deal" activeKey={sortKey} direction={sortDir} onSort={onSort} />
               <SortableHead label="Client" sortKey="client" activeKey={sortKey} direction={sortDir} onSort={onSort} />
@@ -155,17 +197,33 @@ export function TransactionsTable({ rows, exportedBy }: { rows: PaymentTransacti
           <TableBody>
             {filteredRows.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={8} className="text-muted-foreground text-center">
+                <TableCell colSpan={9} className="text-muted-foreground text-center">
                   No transactions match this filter.
                 </TableCell>
               </TableRow>
             ) : (
-              filteredRows.map((row) => (
+              filteredRows.map((row, index) => (
                 <TableRow key={row.id}>
+                  <TableCell className="sticky left-0 z-10 w-20 border-r bg-background group-hover:bg-muted group-data-[state=selected]:bg-muted">
+                    <div className="flex items-center gap-2">
+                      <Checkbox
+                        checked={selectedIds.has(row.id)}
+                        onCheckedChange={() => toggleRow(row.id)}
+                        aria-label={`Select ${row.reference}`}
+                      />
+                      <span className="text-muted-foreground flex-1 text-center">{index + 1}</span>
+                    </div>
+                  </TableCell>
                   <TableCell>{formatDisplayDate(row.transactionDate)}</TableCell>
                   <TableCell>{row.dealNumber ?? "—"}</TableCell>
                   <TableCell>{row.clientName}</TableCell>
-                  <TableCell>{row.reg ?? "—"}</TableCell>
+                  <TableCell>
+                    <RegButton
+                      reg={row.reg}
+                      vehicleId={row.vehicleId}
+                      onOpen={(id, reg) => setOpenVehicle({ id, reg })}
+                    />
+                  </TableCell>
                   <TableCell>{TYPE_LABELS[row.type]}</TableCell>
                   <TableCell>{row.invoiceReference}</TableCell>
                   <TableCell className="text-right tabular-nums">{formatRand(row.cashEffect)}</TableCell>
@@ -178,6 +236,43 @@ export function TransactionsTable({ rows, exportedBy }: { rows: PaymentTransacti
           </TableBody>
         </Table>
       </div>
+
+      <ImageCaptureArea captureRef={captureRef}>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Date</TableHead>
+              <TableHead>Deal number</TableHead>
+              <TableHead>Client</TableHead>
+              <TableHead>Reg</TableHead>
+              <TableHead>Type</TableHead>
+              <TableHead>Invoice</TableHead>
+              <TableHead className="text-right">Amount</TableHead>
+              <TableHead>Status</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {selectedRows.map((row) => (
+              <TableRow key={row.id}>
+                <TableCell>{formatDisplayDate(row.transactionDate)}</TableCell>
+                <TableCell>{row.dealNumber ?? "—"}</TableCell>
+                <TableCell>{row.clientName}</TableCell>
+                <TableCell>{row.reg ?? "—"}</TableCell>
+                <TableCell>{TYPE_LABELS[row.type]}</TableCell>
+                <TableCell>{row.invoiceReference}</TableCell>
+                <TableCell className="text-right tabular-nums">{formatRand(row.cashEffect)}</TableCell>
+                <TableCell>{statusLabel(row)}</TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </ImageCaptureArea>
+
+      <VehicleDetailsDialog
+        vehicleId={openVehicle?.id ?? null}
+        reg={openVehicle?.reg ?? null}
+        onClose={() => setOpenVehicle(null)}
+      />
     </div>
   );
 }

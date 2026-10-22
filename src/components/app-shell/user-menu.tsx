@@ -13,6 +13,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
+import { ROLE_LABELS } from "@/lib/auth/permissions";
 import type { UserRole } from "@/lib/database.types";
 
 function initials(name: string) {
@@ -66,8 +67,8 @@ export function UserMenu({
       <DropdownMenuContent align={variant === "sidebar" ? "start" : "end"} className="w-56">
         <DropdownMenuLabel className="flex flex-col gap-1">
           <span>{fullName}</span>
-          <Badge variant="secondary" className="w-fit capitalize">
-            {role}
+          <Badge variant="secondary" className="w-fit">
+            {ROLE_LABELS[role]}
           </Badge>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />

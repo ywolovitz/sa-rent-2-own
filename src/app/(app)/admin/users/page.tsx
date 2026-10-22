@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/auth/current-profile";
+import { canEdit, ROLE_LABELS } from "@/lib/auth/permissions";
 import { Badge } from "@/components/ui/badge";
 import {
   Table,
@@ -18,7 +19,7 @@ import { StaffActiveToggle } from "./staff-active-toggle";
 
 export default async function StaffPage() {
   const profile = await getCurrentProfile();
-  if (!profile || profile.role !== "admin") {
+  if (!profile || !canEdit(profile.role)) {
     redirect("/");
   }
 
@@ -31,12 +32,9 @@ export default async function StaffPage() {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Staff</h1>
-          <p className="text-muted-foreground text-sm">
-            Accounts log in with a cell number and password — no email required.
-          </p>
-        </div>
+        <p className="text-muted-foreground text-sm">
+          Accounts log in with a cell number and password — no email required.
+        </p>
         <NewStaffDialog />
       </div>
 
@@ -57,9 +55,7 @@ export default async function StaffPage() {
                 <TableCell className="font-medium">{member.full_name}</TableCell>
                 <TableCell>{formatSaPhoneForDisplay(member.phone)}</TableCell>
                 <TableCell>
-                  <Badge variant="outline" className="capitalize">
-                    {member.role}
-                  </Badge>
+                  <Badge variant="outline">{ROLE_LABELS[member.role]}</Badge>
                 </TableCell>
                 <TableCell>
                   <Badge variant={member.is_active ? "success" : "secondary"}>
@@ -76,7 +72,7 @@ export default async function StaffPage() {
             {(staff ?? []).length === 0 && (
               <TableRow>
                 <TableCell colSpan={5} className="text-muted-foreground text-center py-8">
-                  No staff accounts yet.
+                  No users yet.
                 </TableCell>
               </TableRow>
             )}

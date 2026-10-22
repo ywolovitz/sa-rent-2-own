@@ -106,10 +106,13 @@ function RevealedBanking({ clientId }: { clientId: string }) {
 
 export function ClientPanel({
   client,
+  readOnly = false,
   open: openProp,
   onOpenChange: onOpenChangeProp,
 }: {
   client?: ClientWithBanking;
+  /** View-only (Fleet Manager): fields disabled, no Save, no banking Reveal. */
+  readOnly?: boolean;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
 }) {
@@ -163,11 +166,12 @@ export function ClientPanel({
       )}
       <SheetContent>
         <SheetHeader>
-          <SheetTitle>{isEditing ? "Edit client" : "Add client"}</SheetTitle>
+          <SheetTitle>{readOnly ? "Client details" : isEditing ? "Edit client" : "Add client"}</SheetTitle>
         </SheetHeader>
         <Form {...form}>
           <form id="client-form" onSubmit={form.handleSubmit(onSubmit)} className="contents">
             <SheetBody>
+            <fieldset disabled={readOnly} className="contents">
             <section className="grid gap-4 sm:grid-cols-2">
               <h3 className="text-muted-foreground col-span-full text-xs font-semibold tracking-wide uppercase">
                 Client
@@ -270,18 +274,20 @@ export function ClientPanel({
                 <h3 className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">
                   Banking details
                 </h3>
-                {isEditing && client!.banking && <RevealedBanking clientId={client!.id} />}
+                {isEditing && client!.banking && !readOnly && <RevealedBanking clientId={client!.id} />}
               </div>
               {isEditing && client!.banking ? (
                 <p className="text-muted-foreground col-span-full text-sm">
                   On file: {client!.banking.bank_name} •••• {client!.banking.account_number_last4}.
-                  Fill in the fields below to replace it.
+                  {!readOnly && " Fill in the fields below to replace it."}
                 </p>
               ) : (
                 <p className="text-muted-foreground col-span-full text-sm">
-                  Optional. Encrypted at rest — only admins and managers can view it.
+                  {readOnly ? "No banking details on file." : "Optional. Encrypted at rest — only admins can reveal it."}
                 </p>
               )}
+              {!readOnly && (
+              <>
               <FormField
                 control={form.control}
                 name="bankName"
@@ -358,6 +364,8 @@ export function ClientPanel({
                   </FormItem>
                 )}
               />
+              </>
+              )}
             </section>
 
             {isEditing && (
@@ -367,14 +375,17 @@ export function ClientPanel({
               </>
             )}
 
+            </fieldset>
             </SheetBody>
           </form>
         </Form>
-        <SheetFooter>
-          <Button type="submit" form="client-form" disabled={isPending}>
-            {isPending ? "Saving…" : "Save"}
-          </Button>
-        </SheetFooter>
+        {!readOnly && (
+          <SheetFooter>
+            <Button type="submit" form="client-form" disabled={isPending}>
+              {isPending ? "Saving…" : "Save"}
+            </Button>
+          </SheetFooter>
+        )}
       </SheetContent>
     </Sheet>
   );

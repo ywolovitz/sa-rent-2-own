@@ -1,5 +1,7 @@
 "use server";
 
+import { getCurrentProfile } from "@/lib/auth/current-profile";
+import { canSeeFinancials } from "@/lib/auth/permissions";
 import { createClient as createSupabaseServerClient } from "@/lib/supabase/server";
 import type { PaymentTransactionType } from "@/lib/database.types";
 
@@ -17,7 +19,21 @@ export interface ContractPaymentHistoryEntry {
 export async function listContractPaymentHistory(
   contractId: string
 ): Promise<{ data?: ContractPaymentHistoryEntry[]; error?: string }> {
+  const profile = await getCurrentProfile();
+  if (!profile) return { error: "Not authorized" };
+
   const supabase = await createSupabaseServerClient();
+
+  // Cash payments are hidden from Fleet Managers everywhere.
+  if (!canSeeFinancials(profile.role)) {
+    const { data: contract } = await supabase
+      .from("contracts")
+      .select("payment_method")
+      .eq("id", contractId)
+      .maybeSingle();
+    if (contract?.payment_method === "cash") return { data: [] };
+  }
+
   const { data, error } = await supabase
     .from("payment_transactions")
     .select("id, transaction_date, type, reference, invoice_reference, amount, cash_effect, reversed_transaction_id")

@@ -15,6 +15,7 @@ import type {
 } from "./types";
 
 export function PaymentsViewSwitcher({
+  showFinancials,
   reportRows,
   monthLabels,
   summaryRows,
@@ -27,6 +28,8 @@ export function PaymentsViewSwitcher({
   contractsTracked,
   exportedBy,
 }: {
+  /** Admin only: the Dashboard tab and the Outstanding column/total. */
+  showFinancials: boolean;
   reportRows: ContractMonthlyReportRow[];
   monthLabels: string[];
   summaryRows: ContractPaymentSummaryRow[];
@@ -41,34 +44,51 @@ export function PaymentsViewSwitcher({
 }) {
   return (
     <Tabs defaultValue="report" className="flex min-h-0 flex-1 flex-col gap-4">
-      <TabsList>
-        <TabsTrigger value="report">Report</TabsTrigger>
-        <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
-        <TabsTrigger value="transactions">Transactions</TabsTrigger>
-      </TabsList>
+      {/* Title and tabs share one row so the tabs don't cost a line of vertical space. */}
+      <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-2">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Payments</h1>
+          <p className="text-muted-foreground text-sm">
+            Debit-order payment history, backfilled from the legacy system&apos;s ledger.
+          </p>
+        </div>
+        <TabsList>
+          <TabsTrigger value="report">Report</TabsTrigger>
+          {showFinancials && <TabsTrigger value="dashboard">Dashboard</TabsTrigger>}
+          <TabsTrigger value="transactions">Transactions</TabsTrigger>
+        </TabsList>
+      </div>
 
       <TabsContent value="report" className="flex min-h-0 flex-1 flex-col">
-        <MonthlyReportTable rows={reportRows} monthLabels={monthLabels} exportedBy={exportedBy} />
-      </TabsContent>
-
-      <TabsContent value="dashboard" className="flex min-h-0 flex-1 flex-col gap-4">
-        <PaymentsStatsCards
-          netCollected={netCollected}
-          lastMonthLabel={lastMonthLabel}
-          lastMonthNetCollected={lastMonthNetCollected}
-          contractsInArrears={contractsInArrears}
-          contractsTracked={contractsTracked}
+        <MonthlyReportTable
+          rows={reportRows}
+          monthLabels={monthLabels}
+          exportedBy={exportedBy}
+          showCash={showFinancials}
+          showOutstanding={showFinancials}
         />
-
-        <div className="h-64 rounded-lg border bg-background p-4">
-          <h3 className="mb-3 font-semibold tracking-tight">Monthly net collected</h3>
-          <div className="h-[calc(100%-2rem)]">
-            <MonthlyCollectionsChartClient data={monthlyData} />
-          </div>
-        </div>
-
-        <PaymentsTable rows={summaryRows} />
       </TabsContent>
+
+      {showFinancials && (
+        <TabsContent value="dashboard" className="flex min-h-0 flex-1 flex-col gap-4">
+          <PaymentsStatsCards
+            netCollected={netCollected}
+            lastMonthLabel={lastMonthLabel}
+            lastMonthNetCollected={lastMonthNetCollected}
+            contractsInArrears={contractsInArrears}
+            contractsTracked={contractsTracked}
+          />
+
+          <div className="h-64 rounded-lg border bg-background p-4">
+            <h3 className="mb-3 font-semibold tracking-tight">Monthly net collected</h3>
+            <div className="h-[calc(100%-2rem)]">
+              <MonthlyCollectionsChartClient data={monthlyData} />
+            </div>
+          </div>
+
+          <PaymentsTable rows={summaryRows} />
+        </TabsContent>
+      )}
 
       <TabsContent value="transactions" className="flex min-h-0 flex-1 flex-col">
         <TransactionsTable rows={transactionRows} exportedBy={exportedBy} />

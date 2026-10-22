@@ -13,7 +13,7 @@ const NAV_ITEMS = [
   { href: "/clients", label: "Clients", icon: Users, roles: ["admin", "manager"] },
   { href: "/contracts", label: "Contracts", icon: FileText, roles: ["admin", "manager"] },
   { href: "/payments", label: "Payments", icon: Receipt, roles: ["admin", "manager"] },
-  { href: "/admin/users", label: "Staff", icon: ShieldCheck, roles: ["admin"] },
+  { href: "/admin", label: "Admin", icon: ShieldCheck, roles: ["admin"] },
 ] as const;
 
 export function SidebarNav({ role, collapsed }: { role: UserRole; collapsed?: boolean }) {

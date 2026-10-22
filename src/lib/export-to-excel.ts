@@ -43,6 +43,7 @@ export async function exportToExcel<Row>({
   exportedBy,
   columns,
   rows,
+  totals,
 }: {
   baseFilename: string;
   sheetName: string;
@@ -51,6 +52,10 @@ export async function exportToExcel<Row>({
   exportedBy: string;
   columns: ExportColumn<Row>[];
   rows: Row[];
+  /** Optional bold total line under the data (after one blank row, so it
+   * stays outside the autofilter's contiguous range). Column indexes are
+   * 0-based positions in `columns`. */
+  totals?: { label: string; labelColumn: number; valueColumn: number; value: number; numberFormat?: string };
 }) {
   const workbook = new ExcelJS.Workbook();
   workbook.creator = "SAR2O Fleet";
@@ -107,6 +112,21 @@ export async function exportToExcel<Row>({
       }
     });
   });
+
+  if (totals) {
+    const totalRow = sheet.getRow(headerRowIndex + rows.length + 2);
+    const labelCell = totalRow.getCell(totals.labelColumn + 1);
+    labelCell.value = totals.label;
+    labelCell.alignment = { vertical: "middle", horizontal: "right" };
+    const valueCell = totalRow.getCell(totals.valueColumn + 1);
+    valueCell.value = totals.value;
+    valueCell.alignment = { vertical: "middle", horizontal: "right" };
+    if (totals.numberFormat) valueCell.numFmt = totals.numberFormat;
+    for (const cell of [labelCell, valueCell]) {
+      cell.font = { bold: true };
+      cell.border = { top: { style: "thin", color: { argb: BRAND.border } } };
+    }
+  }
 
   columns.forEach((column, i) => {
     const longest = Math.max(

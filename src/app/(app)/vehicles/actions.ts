@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { createClient } from "@/lib/supabase/server";
-import { requireManagerOrAdmin } from "@/lib/auth/require-role";
+import { requireAdmin } from "@/lib/auth/require-role";
 import type { VehicleStatus } from "@/lib/database.types";
 import { VEHICLE_COLOUR_OPTIONS } from "@/lib/vehicle-colours";
 import { vehicleFormSchema, vehicleStatusValues, type VehicleFormValues } from "./schema";
@@ -45,7 +45,7 @@ function toVehicleRow(values: VehicleFormValues) {
 }
 
 export async function createVehicle(raw: VehicleFormValues): Promise<ActionResult> {
-  await requireManagerOrAdmin();
+  await requireAdmin();
   const parsed = vehicleFormSchema.safeParse(raw);
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "Invalid input" };
@@ -80,7 +80,7 @@ export async function updateVehicle(
   vehicleId: string,
   raw: VehicleFormValues
 ): Promise<ActionResult> {
-  await requireManagerOrAdmin();
+  await requireAdmin();
   const parsed = vehicleFormSchema.safeParse(raw);
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "Invalid input" };
@@ -134,7 +134,7 @@ export async function updateVehicleStatus(
   vehicleId: string,
   status: VehicleStatus
 ): Promise<ActionResult> {
-  await requireManagerOrAdmin();
+  await requireAdmin();
   const parsed = z.enum(vehicleStatusValues).safeParse(status);
   if (!parsed.success) {
     return { error: "Invalid status" };
@@ -155,7 +155,7 @@ export async function updateVehicleStatus(
 }
 
 export async function updateVehicleColour(vehicleId: string, colour: string): Promise<ActionResult> {
-  await requireManagerOrAdmin();
+  await requireAdmin();
   const parsed = z.enum(VEHICLE_COLOUR_OPTIONS as [string, ...string[]]).safeParse(colour);
   if (!parsed.success) {
     return { error: "Invalid colour" };
@@ -176,7 +176,7 @@ export async function updateVehicleColour(vehicleId: string, colour: string): Pr
 }
 
 export async function deleteVehicle(vehicleId: string): Promise<ActionResult> {
-  await requireManagerOrAdmin();
+  await requireAdmin();
   const supabase = await createClient();
   const { error } = await supabase.from("vehicles").delete().eq("id", vehicleId);
 

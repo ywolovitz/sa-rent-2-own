@@ -1,9 +1,7 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
-import { toBlob } from "html-to-image";
-import { Download, ImageDown } from "lucide-react";
-import { toast } from "sonner";
+import { Download } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -15,9 +13,21 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { ImageCaptureArea, SelectionActions } from "@/components/ui/selection-actions";
 import { SortableHead } from "@/components/ui/sortable-head";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableFooter,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { RegButton, VehicleDetailsDialog } from "@/components/vehicle-details-dialog";
+import { copyNodeAsImage } from "@/lib/copy-as-image";
 import { exportToExcel, summarizeFilters, type ExportColumn } from "@/lib/export-to-excel";
+import { useRowSelection } from "@/lib/use-row-selection";
 import { compareNumbers, compareStrings, useTableControls } from "@/lib/use-table-controls";
 import { cn } from "@/lib/utils";
 import type { PaymentMethod } from "@/lib/database.types";
@@ -32,7 +42,25 @@ const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
   other: "Other",
 };
 
-type SortKey = "deal" | "client" | "reg" | "missed";
+type SortKey = "deal" | "client" | "reg" | "missed" | "outstanding";
+
+// Column widths in rem. The table uses `table-layout: fixed` with a
+// <colgroup> built from these so every column is *exactly* this wide — with
+// the default auto layout the browser resized columns, so the frozen
+// columns' `left` offsets (the sums of the widths before them) drifted,
+// leaving a gap after the checkbox column and tucking the first month under
+// the frozen pane.
+const COL_REM = { select: 5, deal: 7, client: 9, reg: 8, total: 10, month: 7 };
+
+// Frozen left pane (admin view): select/# · Deal · Client · Reg · Total
+// outstanding stay put while the month columns scroll. Each `left-*` is the
+// sum of the widths before it (5, 12, 21, 29 rem) — change COL_REM and these
+// together.
+const FROZEN_DEAL = "sticky left-20 z-10 bg-background group-hover:bg-muted";
+const FROZEN_CLIENT = "sticky left-48 z-10 truncate bg-background group-hover:bg-muted";
+const FROZEN_REG = "sticky left-84 z-10 truncate bg-background group-hover:bg-muted";
+const FROZEN_TOTAL = "sticky left-116 z-10 border-r bg-background group-hover:bg-muted";
+const FROZEN_HEAD = "z-20 bg-muted";
 
 function formatRand(amount: number): string {
   return new Intl.NumberFormat("en-ZA", {
@@ -46,13 +74,20 @@ export function MonthlyReportTable({
   rows,
   monthLabels,
   exportedBy,
+  showCash,
+  showOutstanding,
 }: {
   rows: ContractMonthlyReportRow[];
   monthLabels: string[];
   exportedBy: string;
+  /** Fleet Managers never see "Cash" payments — the rows are already dropped server-side, this also hides the filter option. */
+  showCash: boolean;
+  /** "Total outstanding" column + footer total — admin only (never populated for Fleet Managers). */
+  showOutstanding: boolean;
 }) {
   const [paymentTypeFilter, setPaymentTypeFilter] = useState<"all" | PaymentMethod>("all");
   const [missedOnly, setMissedOnly] = useState(false);
+  const [openVehicle, setOpenVehicle] = useState<{ id: string; reg: string | null } | null>(null);
   const captureRef = useRef<HTMLDivElement>(null);
 
   const searchFn = useCallback(
@@ -71,6 +106,8 @@ export function MonthlyReportTable({
     // surface the worst-paying accounts first, since that's the point of
     // this report, not bury them at the bottom of an ascending list.
     missed: (a: ContractMonthlyReportRow, b: ContractMonthlyReportRow) => compareNumbers(b.missedCount, a.missedCount),
+    outstanding: (a: ContractMonthlyReportRow, b: ContractMonthlyReportRow) =>
+      compareNumbers(a.outstandingBalance, b.outstandingBalance),
   } satisfies Record<SortKey, (a: ContractMonthlyReportRow, b: ContractMonthlyReportRow) => number>;
 
   const preFiltered = rows
@@ -93,6 +130,16 @@ export function MonthlyReportTable({
       { header: "Deal number", value: (r) => r.dealNumber ?? "" },
       { header: "Client", value: (r) => r.clientName },
       { header: "Reg", value: (r) => r.reg ?? "" },
+      ...(showOutstanding
+        ? [
+            {
+              header: "Total outstanding",
+              value: (r: ContractMonthlyReportRow) => r.outstandingBalance ?? "",
+              numberFormat: '"R"#,##0',
+              align: "right" as const,
+            },
+          ]
+        : []),
       ...monthLabels.map((label, i) => ({
         header: label,
         value: (r: ContractMonthlyReportRow) => r.months[i].netCollected,
@@ -118,68 +165,58 @@ export function MonthlyReportTable({
       exportedBy,
       columns,
       rows: filteredRows,
+      totals: showOutstanding
+        ? {
+            label: "Total outstanding",
+            // Columns are Deal, Client, Reg, Total outstanding, months…
+            labelColumn: 2,
+            valueColumn: 3,
+            value: totalOutstanding,
+            numberFormat: '"R"#,##0',
+          }
+        : undefined,
     });
   }
 
+  const {
+    selectedIds,
+    selectedRows,
+    allVisibleSelected,
+    someVisibleSelected,
+    toggleRow,
+    toggleAllVisible,
+    clear: clearSelection,
+  } = useRowSelection(filteredRows, (r) => r.contractId);
+
+  // One row per contract here, so the total is a plain sum of the filtered rows.
+  const tableRem =
+    COL_REM.select +
+    COL_REM.deal +
+    COL_REM.client +
+    COL_REM.reg +
+    (showOutstanding ? COL_REM.total : 0) +
+    monthLabels.length * COL_REM.month;
+
+  const totalOutstanding = filteredRows.reduce((sum, r) => sum + (r.outstandingBalance ?? 0), 0);
+
   async function handleCopyAsImage() {
-    if (!captureRef.current) return;
-    let blob: Blob | null;
-    try {
-      const node = captureRef.current;
-      const table = node.querySelector("table");
-      const width = table?.scrollWidth ?? node.scrollWidth;
-      const height = table?.scrollHeight ?? node.scrollHeight;
-      blob = await toBlob(node, {
-        backgroundColor: "#ffffff",
-        pixelRatio: 2,
-        width,
-        height,
-        style: { width: `${width}px`, minWidth: `${width}px` },
-      });
-    } catch {
-      toast.error("Couldn't create the image");
-      return;
-    }
-    if (!blob) {
-      toast.error("Couldn't create the image");
-      return;
-    }
-    try {
-      await navigator.clipboard.write([new ClipboardItem({ [blob.type]: blob })]);
-      toast.success("Copied the report as an image — paste it into WhatsApp");
-    } catch {
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `payments-report-${Date.now()}.png`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
-      toast.success("Downloaded the report as an image (clipboard copy isn't supported in this browser)");
-    }
+    if (!captureRef.current || selectedRows.length === 0) return;
+    await copyNodeAsImage(captureRef.current, { count: selectedRows.length, filenamePrefix: "payments-report" });
   }
 
-  function renderRows() {
-    return filteredRows.map((row) => (
-      <TableRow key={row.contractId}>
-        <TableCell>{row.dealNumber ?? "—"}</TableCell>
-        <TableCell>{row.clientName}</TableCell>
-        <TableCell>{row.reg ?? "—"}</TableCell>
-        {row.months.map((cell) => (
-          <TableCell
-            key={cell.monthKey}
-            className={cn(
-              "text-right tabular-nums",
-              cell.beforeCoverage && "text-muted-foreground",
-              !cell.beforeCoverage && cell.missed && "bg-destructive/10 text-destructive font-semibold",
-              !cell.beforeCoverage && !cell.missed && "bg-success/10"
-            )}
-          >
-            {cell.beforeCoverage ? "—" : formatRand(cell.netCollected)}
-          </TableCell>
-        ))}
-      </TableRow>
+  function monthCells(row: ContractMonthlyReportRow) {
+    return row.months.map((cell) => (
+      <TableCell
+        key={cell.monthKey}
+        className={cn(
+          "text-right tabular-nums",
+          cell.beforeCoverage && "text-muted-foreground",
+          !cell.beforeCoverage && cell.missed && "bg-destructive/10 text-destructive font-semibold",
+          !cell.beforeCoverage && !cell.missed && "bg-success/10"
+        )}
+      >
+        {cell.beforeCoverage ? "—" : formatRand(cell.netCollected)}
+      </TableCell>
     ));
   }
 
@@ -201,11 +238,13 @@ export function MonthlyReportTable({
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All payment types</SelectItem>
-            {paymentMethodValues.map((method) => (
-              <SelectItem key={method} value={method}>
-                {PAYMENT_METHOD_LABELS[method]}
-              </SelectItem>
-            ))}
+            {paymentMethodValues
+              .filter((method) => showCash || method !== "cash")
+              .map((method) => (
+                <SelectItem key={method} value={method}>
+                  {PAYMENT_METHOD_LABELS[method]}
+                </SelectItem>
+              ))}
           </SelectContent>
         </Select>
         <label className="flex items-center gap-2 text-sm">
@@ -213,24 +252,80 @@ export function MonthlyReportTable({
           Only accounts with a missed payment
         </label>
         <div className="ml-auto flex items-center gap-2">
-          <Button type="button" variant="outline" size="sm" onClick={handleCopyAsImage}>
-            <ImageDown />
-            Copy as image
-          </Button>
           <Button type="button" variant="outline" size="sm" onClick={handleExport}>
             <Download />
             Export
           </Button>
+          <SelectionActions
+            selectedCount={selectedRows.length}
+            onCopyAsImage={handleCopyAsImage}
+            onClear={clearSelection}
+          />
         </div>
       </div>
 
       <div className="min-h-0 flex-1 overflow-auto rounded-md border">
-        <Table containerClassName="overflow-x-visible">
-          <TableHeader className="bg-background sticky top-0 z-10">
+        <Table
+          containerClassName="overflow-x-visible"
+          className="w-auto table-fixed"
+          style={{ width: `${tableRem}rem` }}
+        >
+          <colgroup>
+            <col style={{ width: `${COL_REM.select}rem` }} />
+            <col style={{ width: `${COL_REM.deal}rem` }} />
+            <col style={{ width: `${COL_REM.client}rem` }} />
+            <col style={{ width: `${COL_REM.reg}rem` }} />
+            {showOutstanding && <col style={{ width: `${COL_REM.total}rem` }} />}
+            {monthLabels.map((label) => (
+              <col key={label} style={{ width: `${COL_REM.month}rem` }} />
+            ))}
+          </colgroup>
+          <TableHeader className="bg-background sticky top-0 z-20">
             <TableRow>
-              <SortableHead label="Deal number" sortKey="deal" activeKey={sortKey} direction={sortDir} onSort={onSort} />
-              <SortableHead label="Client" sortKey="client" activeKey={sortKey} direction={sortDir} onSort={onSort} />
-              <SortableHead label="Reg" sortKey="reg" activeKey={sortKey} direction={sortDir} onSort={onSort} />
+              <TableHead className="sticky left-0 z-20 w-20 border-r bg-muted">
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    checked={allVisibleSelected ? true : someVisibleSelected ? "indeterminate" : false}
+                    onCheckedChange={toggleAllVisible}
+                    aria-label="Select all visible rows"
+                  />
+                  <span className="text-muted-foreground flex-1 text-center">#</span>
+                </div>
+              </TableHead>
+              <SortableHead
+                label="Deal number"
+                sortKey="deal"
+                activeKey={sortKey}
+                direction={sortDir}
+                onSort={onSort}
+                className={showOutstanding ? cn(FROZEN_DEAL, FROZEN_HEAD) : undefined}
+              />
+              <SortableHead
+                label="Client"
+                sortKey="client"
+                activeKey={sortKey}
+                direction={sortDir}
+                onSort={onSort}
+                className={showOutstanding ? cn(FROZEN_CLIENT, FROZEN_HEAD) : undefined}
+              />
+              <SortableHead
+                label="Reg"
+                sortKey="reg"
+                activeKey={sortKey}
+                direction={sortDir}
+                onSort={onSort}
+                className={showOutstanding ? cn(FROZEN_REG, FROZEN_HEAD) : undefined}
+              />
+              {showOutstanding && (
+                <SortableHead
+                  label="Total outstanding"
+                  sortKey="outstanding"
+                  activeKey={sortKey}
+                  direction={sortDir}
+                  onSort={onSort}
+                  className={cn(FROZEN_TOTAL, FROZEN_HEAD, "text-right")}
+                />
+              )}
               {monthLabels.map((label) => (
                 <TableHead key={label} className="text-right">
                   {label}
@@ -241,40 +336,103 @@ export function MonthlyReportTable({
           <TableBody>
             {filteredRows.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={3 + monthLabels.length} className="text-muted-foreground text-center">
+                <TableCell colSpan={4 + monthLabels.length + (showOutstanding ? 1 : 0)} className="text-muted-foreground text-center">
                   No accounts match this filter.
                 </TableCell>
               </TableRow>
             ) : (
-              renderRows()
+              filteredRows.map((row, index) => (
+                <TableRow key={row.contractId}>
+                  <TableCell className="sticky left-0 z-10 w-20 border-r bg-background group-hover:bg-muted group-data-[state=selected]:bg-muted">
+                    <div className="flex items-center gap-2">
+                      <Checkbox
+                        checked={selectedIds.has(row.contractId)}
+                        onCheckedChange={() => toggleRow(row.contractId)}
+                        aria-label={`Select ${row.dealNumber ?? row.clientName}`}
+                      />
+                      <span className="text-muted-foreground flex-1 text-center">{index + 1}</span>
+                    </div>
+                  </TableCell>
+                  <TableCell className={showOutstanding ? FROZEN_DEAL : undefined}>
+                    {row.dealNumber ?? "—"}
+                  </TableCell>
+                  <TableCell className={showOutstanding ? FROZEN_CLIENT : undefined} title={row.clientName}>
+                    {row.clientName}
+                  </TableCell>
+                  <TableCell className={showOutstanding ? FROZEN_REG : undefined} title={row.reg ?? undefined}>
+                    <RegButton
+                      reg={row.reg}
+                      vehicleId={row.vehicleId}
+                      onOpen={(id, reg) => setOpenVehicle({ id, reg })}
+                    />
+                  </TableCell>
+                  {showOutstanding && (
+                    <TableCell className={cn(FROZEN_TOTAL, "text-right font-medium tabular-nums")}>
+                      {row.outstandingBalance != null ? formatRand(row.outstandingBalance) : "—"}
+                    </TableCell>
+                  )}
+                  {monthCells(row)}
+                </TableRow>
+              ))
             )}
           </TableBody>
+          {showOutstanding && filteredRows.length > 0 && (
+            <TableFooter className="bg-muted sticky bottom-0 z-10">
+              <TableRow>
+                <TableCell colSpan={4} className="bg-muted sticky left-0 z-10 text-right">
+                  Total outstanding
+                  <span className="text-muted-foreground ml-1 font-normal">
+                    ({filteredRows.length} account{filteredRows.length === 1 ? "" : "s"})
+                  </span>
+                </TableCell>
+                <TableCell className="bg-muted sticky left-116 z-10 border-r text-right tabular-nums">
+                  {formatRand(totalOutstanding)}
+                </TableCell>
+                <TableCell colSpan={monthLabels.length} />
+              </TableRow>
+            </TableFooter>
+          )}
         </Table>
       </div>
 
-      {/* Off-screen mirror of the visible table, captured for "Copy as
-          image" — see vehicles-table.tsx's handleCopyAsImage for why this
-          needs its own node rather than capturing the visible (scrollable,
-          clipped) table directly. */}
-      <div style={{ height: 0, overflow: "hidden" }} aria-hidden="true">
-        <div ref={captureRef} style={{ width: "max-content" }}>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Deal number</TableHead>
-                <TableHead>Client</TableHead>
-                <TableHead>Reg</TableHead>
-                {monthLabels.map((label) => (
-                  <TableHead key={label} className="text-right">
-                    {label}
-                  </TableHead>
-                ))}
+      <ImageCaptureArea captureRef={captureRef}>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Deal number</TableHead>
+              <TableHead>Client</TableHead>
+              <TableHead>Reg</TableHead>
+              {showOutstanding && <TableHead className="text-right">Total outstanding</TableHead>}
+              {monthLabels.map((label) => (
+                <TableHead key={label} className="text-right">
+                  {label}
+                </TableHead>
+              ))}
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {selectedRows.map((row) => (
+              <TableRow key={row.contractId}>
+                <TableCell>{row.dealNumber ?? "—"}</TableCell>
+                <TableCell>{row.clientName}</TableCell>
+                <TableCell>{row.reg ?? "—"}</TableCell>
+                {showOutstanding && (
+                  <TableCell className="text-right font-medium tabular-nums">
+                    {row.outstandingBalance != null ? formatRand(row.outstandingBalance) : "—"}
+                  </TableCell>
+                )}
+                {monthCells(row)}
               </TableRow>
-            </TableHeader>
-            <TableBody>{renderRows()}</TableBody>
-          </Table>
-        </div>
-      </div>
+            ))}
+          </TableBody>
+        </Table>
+      </ImageCaptureArea>
+
+      <VehicleDetailsDialog
+        vehicleId={openVehicle?.id ?? null}
+        reg={openVehicle?.reg ?? null}
+        onClose={() => setOpenVehicle(null)}
+      />
     </div>
   );
 }
