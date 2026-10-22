@@ -4,20 +4,39 @@ import Link from "next/link";
 
 import { cn } from "@/lib/utils";
 
-function pillClassName(isActive?: boolean) {
+/** "brand": always the system's brand blue with white text (used for the
+ * Fleet total pill), regardless of active state. */
+export type PillTone = "brand";
+
+function pillClassName(isActive?: boolean, tone?: PillTone) {
   return cn(
     "flex items-center gap-2 rounded-md px-3 py-1.5 transition-colors",
-    isActive ? "bg-primary text-primary-foreground" : "bg-muted hover:bg-muted/70"
+    tone === "brand"
+      ? "bg-[var(--brand-blue-dark)] text-white hover:bg-[var(--brand-blue-dark)]/90"
+      : isActive
+        ? "bg-primary text-primary-foreground"
+        : "bg-muted hover:bg-muted/70"
   );
 }
 
-function PillContent({ label, value, isActive }: { label: string; value: number; isActive?: boolean }) {
+function PillContent({
+  label,
+  value,
+  isActive,
+  tone,
+}: {
+  label: string;
+  value: number;
+  isActive?: boolean;
+  tone?: PillTone;
+}) {
   return (
     <>
       <span
         className={cn(
           "text-xs font-semibold tracking-wide uppercase",
-          isActive ? "text-primary-foreground" : "text-destructive"
+          tone === "brand" || isActive ? "text-primary-foreground" : "text-destructive",
+          tone === "brand" && "text-white"
         )}
       >
         {label}
@@ -64,12 +83,14 @@ export function StatButtonPill({
   subtitle,
   onClick,
   isActive,
+  tone,
 }: {
   label: string;
   value: number;
   subtitle: string;
   onClick: () => void;
   isActive?: boolean;
+  tone?: PillTone;
 }) {
   return (
     <button
@@ -77,9 +98,9 @@ export function StatButtonPill({
       onClick={onClick}
       title={subtitle}
       aria-pressed={isActive}
-      className={pillClassName(isActive)}
+      className={pillClassName(isActive, tone)}
     >
-      <PillContent label={label} value={value} isActive={isActive} />
+      <PillContent label={label} value={value} isActive={isActive} tone={tone} />
     </button>
   );
 }

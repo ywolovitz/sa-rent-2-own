@@ -1,29 +1,21 @@
 import { createClient } from "@/lib/supabase/server";
 import type { VehicleStatus } from "@/lib/database.types";
+import { FLEET_STATUSES, VEHICLE_STATUS_LABELS as STATUS_LABELS, isFleetStatus } from "@/lib/vehicle-status";
 
 import { FleetStatusPieChartClient } from "./fleet-status-pie-chart-client";
 
-const STATUS_LABELS: Record<VehicleStatus, string> = {
-  available: "Available",
-  on_road: "On road",
-  parked: "Parked",
-  in_repair: "In repair",
-  for_sale: "For sale",
-  sold: "Sold",
-  written_off: "Written off",
-};
-
 // Distinct swatches from the brand palette so every slice reads apart
-// at a glance (the Status badge reuses grey for two statuses, which is
-// fine with an inline label but not for a legend-only chart).
-const STATUS_COLORS: Record<VehicleStatus, string> = {
-  available: "var(--brand-grey)",
+// at a glance (the Status badge reuses grey for several statuses, which is
+// fine with an inline label but not for a legend-only chart). Only fleet
+// statuses are charted — vehicles that have left the fleet aren't.
+const STATUS_COLORS: Record<(typeof FLEET_STATUSES)[number], string> = {
   on_road: "var(--color-success)",
   parked: "var(--brand-grey-light)",
   in_repair: "var(--color-warning)",
   for_sale: "var(--brand-blue)",
-  sold: "var(--brand-blue-dark)",
-  written_off: "var(--color-destructive)",
+  str: "var(--brand-blue-dark)",
+  rental: "var(--brand-grey)",
+  courtesy: "var(--color-destructive)",
 };
 
 /** Self-contained like FleetStatsCards — RLS already scopes the
@@ -33,27 +25,20 @@ export async function FleetStatusPieChart() {
   const supabase = await createClient();
   const { data: vehicles } = await supabase.from("vehicles").select("status");
 
-  const counts: Record<VehicleStatus, number> = {
-    available: 0,
-    on_road: 0,
-    parked: 0,
-    in_repair: 0,
-    for_sale: 0,
-    sold: 0,
-    written_off: 0,
-  };
+  const counts = Object.fromEntries(FLEET_STATUSES.map((status) => [status, 0])) as Record<
+    (typeof FLEET_STATUSES)[number],
+    number
+  >;
   for (const v of vehicles ?? []) {
-    counts[v.status] += 1;
+    const status: VehicleStatus = v.status;
+    if (isFleetStatus(status)) counts[status as (typeof FLEET_STATUSES)[number]] += 1;
   }
 
-  // Sold / End of Deal vehicles are off the working fleet — not charted.
-  const data = (Object.keys(counts) as VehicleStatus[])
-    .filter((status) => status !== "sold" && counts[status] > 0)
-    .map((status) => ({
-      name: STATUS_LABELS[status],
-      value: counts[status],
-      color: STATUS_COLORS[status],
-    }));
+  const data = FLEET_STATUSES.filter((status) => counts[status] > 0).map((status) => ({
+    name: STATUS_LABELS[status],
+    value: counts[status],
+    color: STATUS_COLORS[status],
+  }));
 
   return (
     <div className="flex flex-1 flex-col rounded-lg border bg-background p-4">

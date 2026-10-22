@@ -1,14 +1,8 @@
 import { z } from "zod";
 
-export const vehicleStatusValues = [
-  "available",
-  "on_road",
-  "parked",
-  "in_repair",
-  "for_sale",
-  "sold",
-  "written_off",
-] as const;
+import { END_OF_CONTRACT_STATUSES, FLEET_STATUSES } from "@/lib/vehicle-status";
+
+export const vehicleStatusValues = [...FLEET_STATUSES, ...END_OF_CONTRACT_STATUSES] as const;
 
 export const trackerStatusValues = ["yes", "no", "no_info"] as const;
 

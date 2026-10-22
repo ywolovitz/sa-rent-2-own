@@ -6,31 +6,8 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Spinner } from "@/components/ui/spinner";
 import { formatDisplayDate } from "@/lib/date-ranges";
-import type { VehicleStatus } from "@/lib/database.types";
+import { VEHICLE_STATUS_LABELS as STATUS_LABELS, VEHICLE_STATUS_VARIANT as STATUS_VARIANT } from "@/lib/vehicle-status";
 import { getVehicleDetails, type VehicleDetails } from "@/app/(app)/vehicles/vehicle-details-actions";
-
-const STATUS_LABELS: Record<VehicleStatus, string> = {
-  available: "Available",
-  on_road: "On road",
-  parked: "Parked",
-  in_repair: "In repair",
-  for_sale: "For sale",
-  sold: "Sold / End of Deal",
-  written_off: "Written off",
-};
-
-const STATUS_VARIANT: Record<
-  VehicleStatus,
-  "default" | "secondary" | "destructive" | "warning" | "success" | "outline"
-> = {
-  available: "secondary",
-  on_road: "success",
-  parked: "outline",
-  in_repair: "warning",
-  for_sale: "default",
-  sold: "secondary",
-  written_off: "destructive",
-};
 
 const TRACKER_LABELS: Record<string, string> = { yes: "Running", no: "Not running", no_info: "No info" };
 

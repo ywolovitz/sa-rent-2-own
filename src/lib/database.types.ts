@@ -11,14 +11,19 @@ export type Json =
   | Json[];
 
 export type UserRole = "admin" | "manager" | "technician";
+// The DB enum also still holds a retired "available" value (enum values
+// can't be dropped cleanly); no row uses it, so it's left out of this type.
 export type VehicleStatus =
-  | "available"
   | "on_road"
   | "parked"
   | "in_repair"
   | "for_sale"
+  | "str"
+  | "rental"
+  | "courtesy"
   | "sold"
-  | "written_off";
+  | "written_off"
+  | "end_of_deal";
 export type TrackerStatus = "yes" | "no" | "no_info";
 export type InsuranceClaimStatus = "none" | "pending" | "paid" | "denied";
 export type ContractType = "rent_to_own" | "short_term_rental" | "other";

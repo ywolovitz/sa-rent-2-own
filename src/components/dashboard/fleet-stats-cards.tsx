@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { isoDaysFromNow } from "@/lib/date-ranges";
 import type { VehicleStatus } from "@/lib/database.types";
+import { isFleetStatus } from "@/lib/vehicle-status";
 
 import { StatLinkPill } from "./stat-pill";
 
@@ -25,27 +26,30 @@ export async function FleetStatsCards() {
   ]);
 
   const counts: Record<VehicleStatus, number> = {
-    available: 0,
     on_road: 0,
     parked: 0,
     in_repair: 0,
     for_sale: 0,
+    str: 0,
+    rental: 0,
+    courtesy: 0,
     sold: 0,
     written_off: 0,
+    end_of_deal: 0,
   };
   for (const v of vehicles ?? []) {
     counts[v.status] += 1;
   }
 
   const serviceDueCutoff = isoDaysFromNow(30);
-  // "Sold / End of Deal" vehicles are off the working fleet (they live on
-  // their own Vehicles tab), so they don't count toward the fleet total or
-  // as service-due.
+  // Sold / Written Off / End of Deal vehicles are off the working fleet
+  // (they live on the Vehicles "End of Contract" tab), so they don't count
+  // toward the fleet total or as service-due.
   const servicingDueSoonCount = (vehicles ?? []).filter(
-    (v) => v.status !== "sold" && v.next_service_date && v.next_service_date <= serviceDueCutoff
+    (v) => isFleetStatus(v.status) && v.next_service_date && v.next_service_date <= serviceDueCutoff
   ).length;
 
-  const total = (vehicles?.length ?? 0) - counts.sold;
+  const total = (vehicles ?? []).filter((v) => isFleetStatus(v.status)).length;
 
   return (
     <div className="flex flex-wrap gap-2">

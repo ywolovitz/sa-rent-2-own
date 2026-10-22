@@ -21,7 +21,6 @@ import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { MultiSelectFilter } from "@/components/ui/multi-select-filter";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ImageCaptureArea, SelectionActions } from "@/components/ui/selection-actions";
 import { ColumnVisibilityMenu } from "@/components/ui/column-visibility-menu";
@@ -29,12 +28,19 @@ import { DraggableTableHead } from "@/components/ui/draggable-table-head";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { StatButtonPill, StatLinkPill } from "@/components/dashboard/stat-pill";
+import { StatButtonPill } from "@/components/dashboard/stat-pill";
 import { daysUntil, formatDayCount, formatDisplayDate, isoDaysFromNow } from "@/lib/date-ranges";
 import { dueDateColorScale, dueDateExcelChip } from "@/lib/due-date-color";
 import { exportToExcel, summarizeFilters, type ExportColumn } from "@/lib/export-to-excel";
 import { useColumnOrder } from "@/lib/use-column-order";
 import { copyNodeAsImage } from "@/lib/copy-as-image";
+import {
+  FLEET_STATUSES,
+  VEHICLE_STATUS_CHIP_COLORS as STATUS_CHIP_COLORS,
+  VEHICLE_STATUS_LABELS as STATUS_LABELS,
+  VEHICLE_STATUS_VARIANT as STATUS_VARIANT,
+  isFleetStatus,
+} from "@/lib/vehicle-status";
 import { useRowSelection } from "@/lib/use-row-selection";
 import { compareNumbers, compareStrings, useTableControls } from "@/lib/use-table-controls";
 import { formatSaPhoneForDisplay } from "@/lib/phone";
@@ -52,39 +58,6 @@ import { InlineEditCell } from "./inline-edit-cell";
 import { DeleteVehicleButton } from "./delete-vehicle-button";
 import { VehiclePanel } from "./vehicle-panel";
 import type { VehicleWithRegistration } from "./types";
-
-const STATUS_VARIANT: Record<
-  VehicleStatus,
-  "default" | "secondary" | "destructive" | "warning" | "success" | "outline"
-> = {
-  available: "secondary",
-  on_road: "success",
-  parked: "outline",
-  in_repair: "warning",
-  for_sale: "default",
-  sold: "secondary",
-  written_off: "destructive",
-};
-
-const STATUS_LABELS: Record<VehicleStatus, string> = {
-  available: "Available",
-  on_road: "On road",
-  parked: "Parked",
-  in_repair: "In repair",
-  for_sale: "For sale",
-  sold: "Sold / End of Deal",
-  written_off: "Written off",
-};
-
-const STATUS_CHIP_COLORS: Record<VehicleStatus, { fill: string; font?: string }> = {
-  available: { fill: "FFE5E5E5", font: "FF1F1F1F" },
-  on_road: { fill: "FF2F9E58" },
-  parked: { fill: "FFFFFFFF", font: "FF1F1F1F" },
-  in_repair: { fill: "FFF0A830" },
-  for_sale: { fill: "FF1F1F1F" },
-  sold: { fill: "FFE5E5E5", font: "FF1F1F1F" },
-  written_off: { fill: "FFFF5252" },
-};
 
 const TRACKER_LABELS: Record<TrackerStatus, string> = {
   yes: "Yes",
@@ -204,8 +177,11 @@ function StatusCell({
         startTransition(async () => {
           const result = await updateVehicleStatus(vehicle.id, status);
           if (result.error) toast.error(result.error);
-          else if (status === "sold") toast.success("Moved to the Sold / End of Deal tab");
-          else if (vehicle.status === "sold") toast.success("Moved back to the Fleet tab");
+          else if (isFleetStatus(vehicle.status) && !isFleetStatus(status)) {
+            toast.success("Moved to the End of Contract tab");
+          } else if (!isFleetStatus(vehicle.status) && isFleetStatus(status)) {
+            toast.success("Moved back to the Fleet tab");
+          }
         });
       }}
     >
@@ -646,7 +622,6 @@ export function VehiclesTable({
   initialStatus,
   initialServiceDueSoon,
   initialContractEndingSoon,
-  contractsEndingSoonCount,
   exportedBy,
 }: {
   rows: VehicleWithRegistration[];
@@ -659,15 +634,17 @@ export function VehiclesTable({
   initialStatus?: VehicleStatus;
   initialServiceDueSoon?: boolean;
   initialContractEndingSoon?: boolean;
-  contractsEndingSoonCount: number;
   exportedBy: string;
 }) {
-  // "Sold / End of Deal" vehicles live on their own tab, out of the working
-  // fleet: they're excluded from the Fleet tab, its counts and its filters.
-  const [view, setView] = useState<"fleet" | "sold">(initialStatus === "sold" ? "sold" : "fleet");
-  // Empty = no status filter (everything in the tab).
+  // Vehicles that have left the fleet (Sold / Written Off / End of Deal)
+  // live on their own "End of Contract" tab and are excluded from the Fleet
+  // tab, its cards and its filters.
+  const [view, setView] = useState<"fleet" | "ended">(
+    initialStatus && !isFleetStatus(initialStatus) ? "ended" : "fleet"
+  );
+  // Status cards are multi-select toggles; empty = no status filter.
   const [statusFilter, setStatusFilter] = useState<VehicleStatus[]>(
-    initialStatus && initialStatus !== "sold" ? [initialStatus] : []
+    initialStatus && isFleetStatus(initialStatus) ? [initialStatus] : []
   );
   // Split from a single combined "due for service" filter into overdue vs.
   // upcoming, since those call for different urgency when staff are
@@ -678,29 +655,27 @@ export function VehiclesTable({
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const captureRef = useRef<HTMLDivElement>(null);
 
-  // Status, service overdue/upcoming, and "contract ending" are presented
-  // as one set of quick filters (the pill row, plus this dropdown and
-  // button), so picking one clears the others — combining them silently
-  // intersects to an empty, confusing result (e.g. Idle + Contract ending,
-  // when no idle vehicle's contract happens to be ending soon).
-  function selectStatus(status: "all" | VehicleStatus) {
-    selectStatuses(status === "all" ? [] : [status]);
+  function toggleStatus(status: VehicleStatus) {
+    setStatusFilter((prev) => (prev.includes(status) ? prev.filter((s) => s !== status) : [...prev, status]));
   }
-  function selectStatuses(statuses: VehicleStatus[]) {
-    setStatusFilter(statuses);
+  // The Fleet card: back to the whole fleet, with every quick filter off.
+  function resetFilters() {
+    setStatusFilter([]);
     setServiceOverdue(false);
     setServiceUpcoming(false);
     setContractEndingSoon(false);
   }
-  function changeView(next: "fleet" | "sold") {
+  function changeView(next: "fleet" | "ended") {
     setView(next);
-    selectStatus("all");
+    resetFilters();
   }
+  // Overdue / Upcoming / Contract ending are alternatives to each other
+  // (picking one clears the other two) but combine freely with the status
+  // cards, e.g. On Road + Overdue.
   function toggleServiceOverdue() {
     setServiceOverdue((was) => {
       const next = !was;
       if (next) {
-        setStatusFilter([]);
         setServiceUpcoming(false);
         setContractEndingSoon(false);
       }
@@ -711,7 +686,6 @@ export function VehiclesTable({
     setServiceUpcoming((was) => {
       const next = !was;
       if (next) {
-        setStatusFilter([]);
         setServiceOverdue(false);
         setContractEndingSoon(false);
       }
@@ -722,7 +696,6 @@ export function VehiclesTable({
     setContractEndingSoon((was) => {
       const next = !was;
       if (next) {
-        setStatusFilter([]);
         setServiceOverdue(false);
         setServiceUpcoming(false);
       }
@@ -847,14 +820,13 @@ export function VehiclesTable({
   // Quick-filter pill counts — always against the full dataset, not
   // preFiltered/filteredRows, so they read as stable totals rather than
   // shrinking as other filters narrow the table.
-  const fleetRows = rows.filter((r) => r.status !== "sold");
-  const soldRows = rows.filter((r) => r.status === "sold");
-  const viewRows = view === "sold" ? soldRows : fleetRows;
+  const fleetRows = rows.filter((r) => isFleetStatus(r.status));
+  const endedRows = rows.filter((r) => !isFleetStatus(r.status));
+  const viewRows = view === "ended" ? endedRows : fleetRows;
 
-  const fleetCount = fleetRows.length;
-  const activeCount = fleetRows.filter((r) => r.status === "on_road").length;
-  const idleCount = fleetRows.filter((r) => r.status === "parked").length;
-  const workshopCount = fleetRows.filter((r) => r.status === "in_repair").length;
+  const statusCounts = Object.fromEntries(
+    FLEET_STATUSES.map((status) => [status, fleetRows.filter((r) => r.status === status).length])
+  ) as Record<(typeof FLEET_STATUSES)[number], number>;
   const serviceOverdueCount = fleetRows.filter(
     (r) => r.next_service_date && r.next_service_date < today
   ).length;
@@ -947,7 +919,7 @@ export function VehiclesTable({
       sheetName: "Vehicles",
       title: "SAR2O Fleet — Vehicles Export",
       filterSummary: summarizeFilters([
-        view === "sold" && "Tab: Sold / End of Deal",
+        view === "ended" && "Tab: End of Contract",
         search && `Search: "${search}"`,
         statusFilter.length > 0 && `Status: ${statusFilter.map((s) => STATUS_LABELS[s]).join(", ")}`,
         serviceOverdue && "Services overdue",
@@ -965,64 +937,33 @@ export function VehiclesTable({
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-4">
           <h1 className="text-2xl font-semibold tracking-tight">Vehicles</h1>
-          <Tabs value={view} onValueChange={(v) => changeView(v as "fleet" | "sold")}>
+          <Tabs value={view} onValueChange={(v) => changeView(v as "fleet" | "ended")}>
             <TabsList>
               <TabsTrigger value="fleet">Fleet ({fleetRows.length})</TabsTrigger>
-              <TabsTrigger value="sold">Sold / End of Deal ({soldRows.length})</TabsTrigger>
+              <TabsTrigger value="ended">End of Contract ({endedRows.length})</TabsTrigger>
             </TabsList>
           </Tabs>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {view === "fleet" && (
             <>
-          <StatButtonPill
-            label="Fleet"
-            value={fleetCount}
-            subtitle="Total vehicles"
-            isActive={statusFilter.length === 0 && !serviceOverdue && !serviceUpcoming && !contractEndingSoon}
-            onClick={() => selectStatus("all")}
-          />
-          <StatButtonPill
-            label="Active"
-            value={activeCount}
-            subtitle="On road"
-            isActive={statusFilter.length === 1 && statusFilter[0] === "on_road"}
-            onClick={() => selectStatus("on_road")}
-          />
-          <StatButtonPill
-            label="Idle"
-            value={idleCount}
-            subtitle="Parked"
-            isActive={statusFilter.length === 1 && statusFilter[0] === "parked"}
-            onClick={() => selectStatus("parked")}
-          />
-          <StatButtonPill
-            label="Workshop"
-            value={workshopCount}
-            subtitle="In repair"
-            isActive={statusFilter.length === 1 && statusFilter[0] === "in_repair"}
-            onClick={() => selectStatus("in_repair")}
-          />
-          <StatButtonPill
-            label="Overdue"
-            value={serviceOverdueCount}
-            subtitle="Services overdue"
-            isActive={serviceOverdue}
-            onClick={toggleServiceOverdue}
-          />
-          <StatButtonPill
-            label="Upcoming"
-            value={serviceUpcomingCount}
-            subtitle="Upcoming services (next 30 days)"
-            isActive={serviceUpcoming}
-            onClick={toggleServiceUpcoming}
-          />
-          <StatLinkPill
-            label="Contracts"
-            value={contractsEndingSoonCount}
-            subtitle="Ending within 3 months"
-            href="/contracts?ending=soon"
-          />
+              <StatButtonPill
+                label="Fleet"
+                value={fleetRows.length}
+                subtitle="Show the whole fleet (clears all filters)"
+                tone="brand"
+                onClick={resetFilters}
+              />
+              {FLEET_STATUSES.map((status) => (
+                <StatButtonPill
+                  key={status}
+                  label={STATUS_LABELS[status]}
+                  value={statusCounts[status]}
+                  subtitle={`Show ${STATUS_LABELS[status]} vehicles — click several to combine`}
+                  isActive={statusFilter.includes(status)}
+                  onClick={() => toggleStatus(status)}
+                />
+              ))}
             </>
           )}
           {canManage && <VehiclePanel />}
@@ -1037,25 +978,36 @@ export function VehiclesTable({
           className="bg-background max-w-xs"
         />
         {view === "fleet" && (
-          <MultiSelectFilter
-            options={vehicleStatusValues
-              .filter((status) => status !== "sold")
-              .map((status) => ({ value: status, label: STATUS_LABELS[status] }))}
-            selected={statusFilter}
-            onChange={selectStatuses}
-            allLabel="All statuses"
-            noun="statuses"
-          />
-        )}
-        {view === "fleet" && canViewContracts && (
-          <Button
-            type="button"
-            variant={contractEndingSoon ? "default" : "outline"}
-            size="sm"
-            onClick={toggleContractEndingSoon}
-          >
-            Contract ending
-          </Button>
+          <>
+            <Button
+              type="button"
+              variant={serviceOverdue ? "default" : "outline"}
+              size="sm"
+              title="Services overdue"
+              onClick={toggleServiceOverdue}
+            >
+              Overdue ({serviceOverdueCount})
+            </Button>
+            <Button
+              type="button"
+              variant={serviceUpcoming ? "default" : "outline"}
+              size="sm"
+              title="Upcoming services (next 30 days)"
+              onClick={toggleServiceUpcoming}
+            >
+              Upcoming ({serviceUpcomingCount})
+            </Button>
+            {canViewContracts && (
+              <Button
+                type="button"
+                variant={contractEndingSoon ? "default" : "outline"}
+                size="sm"
+                onClick={toggleContractEndingSoon}
+              >
+                Contract ending
+              </Button>
+            )}
+          </>
         )}
         <ColumnVisibilityMenu
           columns={toggleableColumns}
@@ -1074,7 +1026,7 @@ export function VehiclesTable({
         />
         <p className="text-muted-foreground text-sm">
           {filteredRows.length === viewRows.length
-            ? `${viewRows.length} ${view === "sold" ? "sold / ended" : "in the fleet"}`
+            ? `${viewRows.length} ${view === "ended" ? "ended" : "in the fleet"}`
             : `${filteredRows.length} of ${viewRows.length}`}
         </p>
       </div>

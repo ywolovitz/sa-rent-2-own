@@ -1,7 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/auth/current-profile";
 import { canEdit, canSeeFinancials, canViewContracts } from "@/lib/auth/permissions";
-import { isoDaysFromNow } from "@/lib/date-ranges";
 import type { PaymentMethod } from "@/lib/database.types";
 import { vehicleStatusValues } from "./schema";
 
@@ -72,11 +71,6 @@ export default async function VehiclesPage({ searchParams }: PageProps<"/vehicle
         : Promise.resolve({ data: [] as { id: string; full_name: string; cell_number: string }[] }),
     ]);
 
-  const contractsEndingCutoff = isoDaysFromNow(90);
-  const contractsEndingSoonCount = (activeContracts ?? []).filter(
-    (c) => c.end_date && c.end_date <= contractsEndingCutoff
-  ).length;
-
   const clientById = new Map((clients ?? []).map((c) => [c.id, c]));
   const plateByVehicle = new Map((registrations ?? []).map((r) => [r.vehicle_id, r.plate_number]));
   const activeContractByVehicle = new Map((activeContracts ?? []).map((c) => [c.vehicle_id, c]));
@@ -121,7 +115,6 @@ export default async function VehiclesPage({ searchParams }: PageProps<"/vehicle
         initialStatus={initialStatus}
         initialServiceDueSoon={initialServiceDueSoon}
         initialContractEndingSoon={initialContractEndingSoon}
-        contractsEndingSoonCount={contractsEndingSoonCount}
         exportedBy={profile?.fullName ?? "Unknown"}
       />
     </div>

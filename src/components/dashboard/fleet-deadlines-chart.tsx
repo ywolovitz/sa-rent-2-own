@@ -3,6 +3,7 @@ import { format } from "date-fns";
 import { Badge } from "@/components/ui/badge";
 import { createClient } from "@/lib/supabase/server";
 import { daysUntil } from "@/lib/date-ranges";
+import { isFleetStatus } from "@/lib/vehicle-status";
 
 import { FleetDeadlinesChartClient, type DeadlineWeekDatum } from "./fleet-deadlines-chart-client";
 
@@ -37,8 +38,8 @@ export async function FleetDeadlinesChart() {
   });
 
   for (const v of vehicles ?? []) {
-    // Sold / End of Deal vehicles are off the fleet — no service or licence deadlines.
-    if (v.status === "sold") continue;
+    // Sold / Written Off / End of Deal vehicles are off the fleet — no service or licence deadlines.
+    if (!isFleetStatus(v.status)) continue;
 
     const serviceBucket = weekBucket(v.next_service_date);
     if (serviceBucket !== null) weeks[serviceBucket].service += 1;

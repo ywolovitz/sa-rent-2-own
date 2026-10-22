@@ -36,6 +36,8 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { useControllableOpen } from "@/lib/use-controllable-open";
 
+import { VEHICLE_STATUS_LABELS as STATUS_LABELS } from "@/lib/vehicle-status";
+
 import { createVehicle, updateVehicle } from "./actions";
 import {
   trackerStatusValues,
@@ -47,22 +49,12 @@ import type { VehicleWithRegistration } from "./types";
 import { VehicleCostsSection } from "./vehicle-costs-section";
 import { VehicleContractHistorySection } from "./vehicle-contract-history-section";
 
-const STATUS_LABELS: Record<(typeof vehicleStatusValues)[number], string> = {
-  available: "Available",
-  on_road: "On road",
-  parked: "Parked",
-  in_repair: "In repair",
-  for_sale: "For sale",
-  sold: "Sold / End of Deal",
-  written_off: "Written off",
-};
-
 function toFormValues(vehicle?: VehicleWithRegistration): VehicleFormValues {
   if (!vehicle) {
     return {
       fileNo: "",
       plateNumber: "",
-      status: "available",
+      status: "parked",
       trackerRunning: "no_info",
     };
   }
