@@ -9,7 +9,7 @@
  *
  *   node --env-file=.env.local scripts/reload-fleet-data.mjs \
  *     --fleet   ~/Downloads/"SAR2O FLEET-YONI APRIL 2026 FINAL.xlsx" \
- *     --accounts accounts.txt \
+ *     --accounts data/accounts.txt \
  *     --ledger  data/mad1_Deal_transaction_abbr_Vehicle_mat_<date>_Company_SAMC.xlsx \
  *     --batch   ~/Downloads/"NEDBANK BATCH UPLOAD FINAL.xlsx" \
  *     [--out .import-reports/reload]
@@ -350,6 +350,8 @@ const fileKeyOf = (f) => {
   const m = String(f ?? "").toUpperCase().replace(/\s+/g, "").match(/^([AB])0*(\d+)$/);
   return m ? `${m[1]}${m[2]}` : null;
 };
+/** File-number comparison key: B294 and B0294 are the same vehicle. */
+const fkey = (f) => fileKeyOf(f) ?? String(f ?? "").toUpperCase().replace(/\s+/g, "");
 {
   const FILE_RE = /^[AB]\s?0*\d{1,4}$/i;
   const PLATE_RE = /^[A-Z]{2,3}\s?\d{2,3}\s?[A-Z]{2,3}(GP|MP|L|NW|EC|FS|NC|WC|KZN)?$/i;
@@ -426,7 +428,7 @@ const accountsByFile = new Map();
 const accountsByPlate = new Map();
 for (const [deal, a] of accounts) {
   if (a.fileNo) {
-    const f = a.fileNo.toUpperCase().replace(/\s+/g, "");
+    const f = fkey(a.fileNo);
     if (!accountsByFile.has(f)) accountsByFile.set(f, new Set());
     accountsByFile.get(f).add(deal);
   }
@@ -437,13 +439,23 @@ for (const [deal, a] of accounts) {
   }
 }
 
-/** Returns { deal, via } or { none: true } / { ambiguous: [...] }. */
+/**
+ * Returns { deal, via[, stale] }, { ambiguous: [...] } or { none: true }.
+ * Preference: the one live deal on the vehicle; else the one live deal that
+ * is in the Nedbank batch / signed & delivered / held by the fleet sheet's
+ * client; else — only when nothing is live — the vehicle's last known deal,
+ * if the account holder's name fits (flagged as stale).
+ */
 function matchDeal(v) {
   const cand = new Set();
   for (const k of v.regKeys) for (const d of dealsByLedgerVehicle.get(k) ?? []) cand.add(d);
-  for (const d of accountsByFile.get(String(v.fileNo ?? "").toUpperCase().replace(/\s+/g, "")) ?? []) cand.add(d);
+  for (const d of accountsByFile.get(fkey(v.fileNo)) ?? []) cand.add(d);
   for (const k of v.regKeys) for (const d of accountsByPlate.get(k) ?? []) cand.add(d);
 
+  const nameMatch = (d) => {
+    const a = accounts.get(d);
+    return Boolean(a?.name && v.clientSurname && sameName(v.clientSurname, a.name));
+  };
   const live = [...cand].filter(isLive);
   if (live.length === 1) return { deal: live[0], via: "only live deal on this vehicle" };
   if (live.length > 1) {
@@ -451,9 +463,23 @@ function matchDeal(v) {
     if (inBatch.length === 1) return { deal: inBatch[0], via: "the only one of several live deals that is in the Nedbank batch" };
     const signed = live.filter((d) => SIGNED.test(accounts.get(d)?.workstate ?? ""));
     if (signed.length === 1) return { deal: signed[0], via: "the only one of several live deals marked 'signed and delivered'" };
+    const named = live.filter(nameMatch);
+    if (named.length === 1) return { deal: named[0], via: "the only one of several live deals held by the fleet sheet's client" };
     return { ambiguous: live };
   }
-  return { none: true, candidates: [...cand] };
+
+  // Nothing live: fall back to the vehicle's last known deal.
+  const all = [...cand];
+  const named = all.filter(nameMatch);
+  const pool = named.length ? named : all.length === 1 ? all : [];
+  if (pool.length) {
+    pool.sort((a, b) => (ledger.get(b)?.lastRent ?? "").localeCompare(ledger.get(a)?.lastRent ?? ""));
+    const top = pool[0];
+    const tied = pool.length > 1 && (ledger.get(pool[1])?.lastRent ?? "") === (ledger.get(top)?.lastRent ?? "");
+    if (!tied) return { deal: top, via: "the vehicle's last known deal", stale: true, lastRent: ledger.get(top)?.lastRent ?? null };
+    return { ambiguous: pool };
+  }
+  return { none: true, candidates: all };
 }
 
 // ---------------------------------------------------------------------------
@@ -520,6 +546,9 @@ for (const v of vehicles) {
   if (m.deal) {
     deal = m.deal;
     via = m.via;
+    if (m.stale) {
+      ex("Deals", `${v.fileNo} ${v.reg ?? ""} ${deal}`.trim(), `Loaded the vehicle's last known deal. The ledger shows no monthly rental raised since ${m.lastRent ?? "(never)"}, so billing may have stopped or moved to another account`, "Is this deal still the current one for this vehicle?", "info");
+    }
     if (usedDeals.has(deal)) {
       ex("Deals", `${v.fileNo} ${v.reg ?? ""}`.trim(), `Deal ${deal} also matches ${usedDeals.get(deal)} — loaded on the first only`, "Which vehicle does this deal belong to?", "error");
       deal = null;
@@ -536,7 +565,7 @@ for (const v of vehicles) {
   // details on this client.
   if (deal) {
     const a0 = accounts.get(deal);
-    const fileOk = a0?.fileNo && String(a0.fileNo).toUpperCase().replace(/\s+/g, "") === String(v.fileNo ?? "").toUpperCase().replace(/\s+/g, "");
+    const fileOk = a0?.fileNo && fkey(a0.fileNo) === fkey(v.fileNo);
     const plateOk = a0?.vehicle && v.regKeys.includes(plateKey(a0.vehicle));
     const nameOk = !a0?.name || !v.clientSurname || sameName(v.clientSurname, a0.name);
     if (!nameOk && !fileOk && !plateOk) {
@@ -884,6 +913,10 @@ for (const area of order) {
     [{ ref: area, detail: AREA_HELP[area] ?? "", question: "", answer: "" }, ...rows.map((e) => ({ ref: e.ref, detail: e.detail, question: e.question, answer: "" }))]
   );
 }
+writeFileSync(
+  `${OUT_DIR}/contracts-${TODAY}.json`,
+  JSON.stringify(contracts.map((c) => ({ fileNo: c.vehicle.fileNo, reg: c.vehicle.reg, deal: c.deal, client: c.client.fullName, outstanding: c.outstanding })), null, 1)
+);
 const xlsxPath = `${OUT_DIR}/exceptions-${TODAY}.xlsx`;
 await wb.xlsx.writeFile(xlsxPath);
 
