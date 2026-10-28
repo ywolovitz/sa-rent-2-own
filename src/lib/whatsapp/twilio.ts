@@ -74,3 +74,17 @@ export async function sendWhatsAppMessage(to: string, body: string): Promise<voi
     }
   }
 }
+
+/** Downloads an attachment the person sent. Twilio media URLs need the account credentials. */
+export async function downloadTwilioMedia(url: string, maxBytes: number): Promise<Buffer | null> {
+  const sid = process.env.TWILIO_ACCOUNT_SID;
+  const token = process.env.TWILIO_AUTH_TOKEN;
+  if (!sid || !token) throw new Error("Missing TWILIO_ACCOUNT_SID / TWILIO_AUTH_TOKEN");
+  // Only ever send our credentials to Twilio.
+  if (new URL(url).hostname !== "api.twilio.com") return null;
+
+  const res = await fetch(url, { headers: { Authorization: `Basic ${Buffer.from(`${sid}:${token}`).toString("base64")}` } });
+  if (!res.ok) throw new Error(`Twilio media download failed: ${res.status}`);
+  const buf = Buffer.from(await res.arrayBuffer());
+  return buf.length > maxBytes ? null : buf;
+}

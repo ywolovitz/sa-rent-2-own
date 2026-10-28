@@ -1,6 +1,7 @@
 import { after } from "next/server";
 
 import { answerQuestion } from "@/lib/whatsapp/bot";
+import { handleServiceFlow } from "@/lib/whatsapp/service-flow";
 import {
   LIMIT_PER_DAY,
   LIMIT_PER_HOUR,
@@ -66,6 +67,24 @@ async function handleInbound(params: Record<string, string>) {
     if (counts.hour > LIMIT_PER_HOUR || counts.day > LIMIT_PER_DAY) {
       await markInbound(inboundId, "rate_limited", profile.id);
       await notice(RATE_LIMITED, profile.id);
+      return;
+    }
+
+    // Guided "Add a service" conversation: scripted, not the model, because it writes data.
+    const media =
+      Number(params.NumMedia ?? "0") > 0 && params.MediaUrl0
+        ? { url: params.MediaUrl0, contentType: params.MediaContentType0 ?? "" }
+        : null;
+    const flowReply = await handleServiceFlow(
+      key,
+      question,
+      { id: profile.id, fullName: profile.full_name, role: profile.role },
+      media
+    );
+    if (flowReply !== null) {
+      await sendWhatsAppMessage(from, flowReply);
+      await recordOutbound({ phone: key, profileId: profile.id, body: flowReply, kind: "answer" });
+      await markInbound(inboundId, "answered", profile.id);
       return;
     }
 

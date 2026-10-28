@@ -557,6 +557,24 @@ export interface Database {
         Update: Partial<Database["public"]["Tables"]["whatsapp_messages"]["Insert"]>;
         Relationships: [];
       };
+      whatsapp_flows: {
+        Row: {
+          phone: string;
+          flow: string;
+          step: string;
+          data: Json;
+          updated_at: string;
+        };
+        Insert: {
+          phone: string;
+          flow: string;
+          step: string;
+          data?: Json;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["whatsapp_flows"]["Insert"]>;
+        Relationships: [];
+      };
     };
     Views: {
       vehicle_current_registration: {
