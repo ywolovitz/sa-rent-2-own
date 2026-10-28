@@ -82,6 +82,7 @@ Hosted on Vercel, auto-deploying from the `main` branch. Feature work happens on
 - `src/lib/export-to-excel.ts` — the styled `.xlsx` export engine (exceljs-based) shared by all three list views
 - `src/lib/database.types.ts` — hand-maintained TypeScript types matching the migrations; keep this in sync whenever a migration changes a table shape
 - `scripts/import-current-fleet.mjs` — one-off script used to import the client's real fleet data; see `SPEC.md` §7 and §10
+- `scripts/reload-fleet-data.mjs` — plans the full fleet data reload and the client exception report; `scripts/apply-client-corrections.mjs` — turns the client's returned answers into a guarded SQL patch (both only write files, never touch the database); see `SPEC.md` §11 item 22
 
 ## What's built vs. what's next
 
