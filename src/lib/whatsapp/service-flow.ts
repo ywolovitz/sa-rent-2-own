@@ -4,6 +4,7 @@ import { canEdit } from "@/lib/auth/permissions";
 import type { UserRole } from "@/lib/database.types";
 import { createAdminClient } from "@/lib/supabase/admin";
 
+import { parseServiceMessage } from "./service-parse";
 import { downloadTwilioMedia } from "./twilio";
 
 /**
@@ -27,7 +28,7 @@ const INVOICE_TYPES: Record<string, string> = {
   "image/webp": "webp",
 };
 
-type Step = "reg" | "service_date" | "place" | "current_km" | "next_date" | "next_km" | "invoice" | "confirm";
+type Step = "reg" | "service_date" | "place" | "current_km" | "next_date" | "next_km" | "amount" | "invoice" | "confirm";
 
 interface FlowData {
   vehicleId?: string;
@@ -39,6 +40,7 @@ interface FlowData {
   currentKm?: number;
   nextDate?: string;
   nextKm?: number;
+  amount?: number;
   invoicePath?: string | null;
 }
 
@@ -55,6 +57,7 @@ const QUESTIONS: Record<Exclude<Step, "confirm">, string> = {
   current_km: "What's the current odometer reading in km?",
   next_date: "What's the next service date?",
   next_km: "What's the next service km?",
+  amount: "What was the total cost of the service in rand? (e.g. 2450 or R2 450.50)",
   invoice: 'Do you have a photo or copy of the invoice? Send it now (photo or PDF), or reply SKIP.',
 };
 
@@ -100,6 +103,16 @@ export function parseKm(input: string): number | null {
   return Number.isSafeInteger(n) && n < 2_000_000 ? n : null;
 }
 
+/** "2450", "R2 450.50", "R 2,450" -> 2450.5. Positive, at most 2 decimals, under R10 million. */
+export function parseAmount(input: string): number | null {
+  const s = input.trim().toLowerCase().replace(/^r\s*/, "").replace(/[ ,]/g, "");
+  if (!/^\d+(\.\d{1,2})?$/.test(s)) return null;
+  const n = Number(s);
+  return n > 0 && n < 10_000_000 ? n : null;
+}
+
+const formatRand = (n: number) => `R${n.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
 const addDays = (iso: string, days: number) => {
   const d = new Date(`${iso}T00:00:00Z`);
   d.setUTCDate(d.getUTCDate() + days);
@@ -124,6 +137,89 @@ export const validateNextKm = (nextKm: number, currentKm: number) => {
   const min = currentKm + MIN_NEXT_KM_GAP;
   return nextKm < min ? `The next service km must be at least ${min.toLocaleString("en-ZA")} (current km + ${MIN_NEXT_KM_GAP.toLocaleString("en-ZA")}).` : null;
 };
+
+/**
+ * Re-checks every field in `d` against the same rules the step-by-step flow
+ * applies, dropping any that fail so they get asked again. Used for values
+ * that arrive pre-filled from a free-text message.
+ */
+function sanitise(d: FlowData): { data: FlowData; dropped: string[] } {
+  const data = { ...d };
+  const dropped: string[] = [];
+  if (data.serviceDate && validateServiceDate(data.serviceDate)) {
+    delete data.serviceDate;
+    dropped.push("service date");
+  }
+  if (data.currentKm != null && data.vehicleKm != null && data.currentKm < data.vehicleKm) {
+    delete data.currentKm;
+    dropped.push("current km");
+  }
+  if (data.nextDate && (!data.serviceDate || validateNextDate(data.nextDate, data.serviceDate))) {
+    delete data.nextDate;
+    dropped.push("next service date");
+  }
+  if (data.nextKm != null && (data.currentKm == null || validateNextKm(data.nextKm, data.currentKm))) {
+    delete data.nextKm;
+    dropped.push("next service km");
+  }
+  return { data, dropped };
+}
+
+/** First step that still needs an answer. The invoice is always asked (it needs a photo or SKIP). */
+function nextStep(d: FlowData): Step {
+  if (!d.vehicleId) return "reg";
+  if (!d.serviceDate) return "service_date";
+  if (!d.place) return "place";
+  if (d.currentKm == null) return "current_km";
+  if (!d.nextDate) return "next_date";
+  if (d.nextKm == null) return "next_km";
+  if (d.amount == null) return "amount";
+  if (d.invoicePath === undefined) return "invoice";
+  return "confirm";
+}
+
+/** Turns a free-text message into pre-filled flow data; null if nothing usable was found. */
+async function prefillFromMessage(text: string): Promise<{ data: FlowData; notes: string[] } | null> {
+  const parsed = await parseServiceMessage(text);
+  if (!parsed) return null;
+  const data: FlowData = {};
+  const notes: string[] = [];
+
+  if (parsed.reg) {
+    const reg = normaliseReg(parsed.reg);
+    const v = reg.length >= 3 ? await findCurrentVehicle(reg) : ({ status: "none" } as const);
+    if (v.status === "ok") Object.assign(data, { vehicleId: v.id, reg, vehicle: v.label, vehicleKm: v.km });
+    else notes.push(`I can't find a vehicle with the current registration ${reg}.`);
+  }
+  const serviceDate = parsed.serviceDate ? parseDate(parsed.serviceDate) : null;
+  if (serviceDate) data.serviceDate = serviceDate;
+  const nextDate = parsed.nextDate ? parseDate(parsed.nextDate) : null;
+  if (nextDate) data.nextDate = nextDate;
+  if (parsed.place && parsed.place.length >= 2 && parsed.place.length <= 100) data.place = parsed.place;
+  const currentKm = parsed.currentKm != null ? parseKm(String(parsed.currentKm)) : null;
+  if (currentKm !== null) data.currentKm = currentKm;
+  const nextKm = parsed.nextKm != null ? parseKm(String(parsed.nextKm)) : null;
+  if (nextKm !== null) data.nextKm = nextKm;
+  const amount = parsed.amount != null ? parseAmount(String(parsed.amount)) : null;
+  if (amount !== null) data.amount = amount;
+
+  const clean = sanitise(data);
+  if (clean.dropped.length) notes.push(`I couldn't use the ${clean.dropped.join(", ")} from your message.`);
+  return Object.keys(clean.data).length ? { data: clean.data, notes } : notes.length ? { data: {}, notes } : null;
+}
+
+const describeFilled = (d: FlowData) =>
+  [
+    d.reg && `Vehicle: ${d.reg} (${d.vehicle})`,
+    d.serviceDate && `Serviced: ${d.serviceDate}`,
+    d.place && `At: ${d.place}`,
+    d.currentKm != null && `Current km: ${d.currentKm.toLocaleString("en-ZA")}`,
+    d.nextDate && `Next service date: ${d.nextDate}`,
+    d.nextKm != null && `Next service km: ${d.nextKm.toLocaleString("en-ZA")}`,
+    d.amount != null && `Cost: ${formatRand(d.amount)}`,
+  ]
+    .filter(Boolean)
+    .join("\n");
 
 // ---------- flow state ----------
 
@@ -182,16 +278,15 @@ async function findCurrentVehicle(reg: string) {
 async function saveService(user: FlowUser, d: Required<FlowData>): Promise<boolean> {
   const db = createAdminClient();
   // The cost row is the service history entry (same table the web app's cost log uses).
-  // Amount is mandatory in that table but not asked here, so 0 until someone adds the invoice.
   const { error } = await db.from("vehicle_costs").insert({
     vehicle_id: d.vehicleId,
     cost_type: "service",
     cost_date: d.serviceDate,
     supplier: d.place,
-    amount: 0,
+    amount: d.amount,
     invoice_file_path: d.invoicePath,
     mileage_at_time: d.currentKm,
-    notes: `Logged via WhatsApp by ${user.fullName}. Next service ${d.nextDate} / ${d.nextKm} km. Amount not captured.`,
+    notes: `Logged via WhatsApp by ${user.fullName}. Next service ${d.nextDate} / ${d.nextKm} km.`,
     recorded_by: user.id,
   });
   if (error) {
@@ -231,7 +326,7 @@ async function storeInvoice(vehicleId: string, media: { url: string; contentType
 // ---------- the conversation ----------
 
 const summary = (d: Required<FlowData>) =>
-  `${d.reg} (${d.vehicle})\nServiced: ${d.serviceDate} at ${d.place}\nCurrent km: ${d.currentKm!.toLocaleString("en-ZA")}\nNext service: ${d.nextDate} or ${d.nextKm.toLocaleString("en-ZA")} km\nInvoice: ${d.invoicePath ? "attached" : "none"}`;
+  `${d.reg} (${d.vehicle})\nServiced: ${d.serviceDate} at ${d.place}\nCurrent km: ${d.currentKm!.toLocaleString("en-ZA")}\nNext service: ${d.nextDate} or ${d.nextKm.toLocaleString("en-ZA")} km\nCost: ${formatRand(d.amount)}\nInvoice: ${d.invoicePath ? "attached" : "none"}`;
 
 /**
  * Returns the reply if this message belongs to the add-service flow (starting
@@ -266,8 +361,21 @@ async function runServiceFlow(
     if (!canEdit(user.role)) {
       return "Only admins can add a service. Ask an admin, or add it in the web app.";
     }
-    await saveFlow(phone, "reg", {});
-    return `Let's add a service. Reply "cancel" at any time to stop.\n\n${QUESTIONS.reg}`;
+    const intro = `Let's add a service. Reply "cancel" at any time to stop.`;
+    // A long message may already contain the details: pull them out, then only ask for what's missing.
+    const prefill = text.replace(START_RE, "").trim().length >= 8 ? await prefillFromMessage(text) : null;
+    if (!prefill) {
+      await saveFlow(phone, "reg", {});
+      return `${intro}\n\n${QUESTIONS.reg}`;
+    }
+    const step = nextStep(prefill.data);
+    await saveFlow(phone, step, prefill.data);
+    const got = describeFilled(prefill.data);
+    return [
+      got ? `${intro}\n\nFrom your message:\n${got}` : intro,
+      ...prefill.notes,
+      `${QUESTIONS[step as Exclude<Step, "confirm">]}`,
+    ].join("\n\n");
   }
 
   // Flow state is only trusted for someone who may still use it.
@@ -282,7 +390,9 @@ async function runServiceFlow(
   }
 
   const { step, data } = flow;
-  const ask = async (next: Step, d: FlowData, prefix = "") => {
+  const ask = async (_next: Step, d: FlowData, prefix = "") => {
+    // Skips anything already pre-filled from a free-text message.
+    const next = nextStep(d);
     await saveFlow(phone, next, d);
     return `${prefix}${next === "confirm" ? "" : QUESTIONS[next]}`;
   };
@@ -296,7 +406,10 @@ async function runServiceFlow(
       if (v.status === "none") {
         return retry(`I can't find a vehicle with the current registration ${reg}. Check the plate and try again.`);
       }
-      return ask("service_date", { vehicleId: v.id, reg, vehicle: v.label, vehicleKm: v.km }, `Found ${reg} — ${v.label}.\n`);
+      // Keep anything already pre-filled from a free-text message, re-checked now the vehicle's km is known.
+      const { data: kept, dropped } = sanitise({ ...data, vehicleId: v.id, reg, vehicle: v.label, vehicleKm: v.km });
+      const note = dropped.length ? `(I couldn't use the ${dropped.join(", ")} you sent.)\n` : "";
+      return ask("service_date", kept, `Found ${reg} — ${v.label}.\n${note}`);
     }
     case "service_date": {
       const iso = parseDate(text);
@@ -330,7 +443,12 @@ async function runServiceFlow(
       if (km === null) return retry("I couldn't read that — send the km as a number, e.g. 55200.");
       const err = validateNextKm(km, data.currentKm!);
       if (err) return retry(err);
-      return ask("invoice", { ...data, nextKm: km });
+      return ask("amount", { ...data, nextKm: km });
+    }
+    case "amount": {
+      const amount = parseAmount(text);
+      if (amount === null) return retry("I couldn't read that — send the cost in rand as a number, e.g. 2450.");
+      return ask("invoice", { ...data, amount });
     }
     case "invoice": {
       let invoicePath: string | null = null;
@@ -355,7 +473,7 @@ async function runServiceFlow(
       const ok = await saveService(user, data as Required<FlowData>);
       if (!ok) return "Sorry, I couldn't save that. Please check the vehicle in the web app, then try again if needed.";
       await clearFlow(phone);
-      return `Saved. Service recorded for ${data.reg} and the vehicle's mileage and next service details are updated.\n(The cost amount wasn't captured — add it in the web app if needed.)`;
+      return `Saved. Service recorded for ${data.reg} and the vehicle's mileage and next service details are updated.`;
     }
   }
 }
