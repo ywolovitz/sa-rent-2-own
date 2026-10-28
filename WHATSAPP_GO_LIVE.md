@@ -1,4 +1,9 @@
-# WhatsApp query bot — where we're up to (2026-10-28)
+# WhatsApp query bot — setup record (2026-10-28)
+
+> **Status update:** the bot is live on prod (env vars set, webhook pointed, admins approved) and now also runs the
+> "Add a service" flow. The to-do list below is the original go-live checklist, kept for reference and rollback.
+> Current behaviour is documented in `SPEC.md` §11 item 8. Optional: `WHATSAPP_SKIP_CONTENT_SID` (a "No" button on optional
+> questions; create it with `scripts/create-whatsapp-skip-button.mjs`) and `WHATSAPP_PARSE_MODEL` (free-text parsing model).
 
 A staff-only, read-only WhatsApp bot: approved people text the Twilio number and ask about
 vehicles ("where's B0154?", "what's due for service this week?", "how many cars are on STR?").
