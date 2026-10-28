@@ -79,13 +79,14 @@ function WhatsAppIcon({ className }: { className?: string }) {
   );
 }
 
-function SourceIcon({ source }: { source: VehicleCost["source"] }) {
+function SourceIcon({ source, by }: { source: VehicleCost["source"]; by: string | null }) {
+  const suffix = by ? ` by ${by}` : "";
   return source === "whatsapp" ? (
-    <span title="Logged via WhatsApp" role="img" aria-label="Logged via WhatsApp" className="shrink-0">
+    <span title={`Logged via WhatsApp${suffix}`} role="img" aria-label={`Logged via WhatsApp${suffix}`} className="shrink-0">
       <WhatsAppIcon className="size-4 text-[#25D366]" />
     </span>
   ) : (
-    <span title="Entered manually" role="img" aria-label="Entered manually" className="shrink-0">
+    <span title={`Entered manually${suffix}`} role="img" aria-label={`Entered manually${suffix}`} className="shrink-0">
       <User className="text-muted-foreground size-4" />
     </span>
   );
@@ -132,6 +133,7 @@ function CostsTable({
             <TableHead className="text-right">Mileage</TableHead>
             <TableHead className="text-right">Amount</TableHead>
             <TableHead>Invoice</TableHead>
+            <TableHead>Logged by</TableHead>
             <TableHead className="w-12" />
           </TableRow>
         </TableHeader>
@@ -140,7 +142,7 @@ function CostsTable({
             <TableRow key={cost.id}>
               <TableCell className="whitespace-nowrap">
                 <div className="flex items-center gap-2">
-                  <SourceIcon source={cost.source} />
+                  <SourceIcon source={cost.source} by={cost.recorded_by_name} />
                   {formatDisplayDate(cost.cost_date)}
                 </div>
               </TableCell>
@@ -159,6 +161,7 @@ function CostsTable({
                   <span className="text-muted-foreground">—</span>
                 )}
               </TableCell>
+              <TableCell className="whitespace-nowrap">{cost.recorded_by_name || "—"}</TableCell>
               <TableCell>
                 {canManage && (
                   <Button
@@ -180,7 +183,7 @@ function CostsTable({
               Total
             </TableCell>
             <TableCell className="text-right font-semibold whitespace-nowrap">{formatRand(total)}</TableCell>
-            <TableCell colSpan={2} />
+            <TableCell colSpan={3} />
           </TableRow>
         </TableBody>
       </Table>

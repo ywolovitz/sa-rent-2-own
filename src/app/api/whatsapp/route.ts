@@ -82,8 +82,8 @@ async function handleInbound(params: Record<string, string>) {
       media
     );
     if (flowReply !== null) {
-      await sendWhatsAppMessage(from, flowReply);
-      await recordOutbound({ phone: key, profileId: profile.id, body: flowReply, kind: "answer" });
+      await sendWhatsAppMessage(from, flowReply.text, { skipButton: flowReply.skipButton });
+      await recordOutbound({ phone: key, profileId: profile.id, body: flowReply.text, kind: "answer" });
       await markInbound(inboundId, "answered", profile.id);
       return;
     }

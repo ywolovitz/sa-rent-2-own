@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 
 import { createClient as createSupabaseServerClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAdmin } from "@/lib/auth/require-role";
 import { encryptField, decryptField, lastFour } from "@/lib/crypto";
 import { clientFormSchema, type ClientFormValues } from "./schema";
@@ -188,12 +189,19 @@ export async function revealBankingDetails(
     keyVersion: row.key_version,
   });
 
-  await supabase.from("audit_log").insert({
+  // audit_log has no insert policy for signed-in users, so this goes through the
+  // service role. Fail closed: no log row, no reveal.
+  const { error: auditError } = await createAdminClient().from("audit_log").insert({
     table_name: "client_banking_details",
     record_id: row.id,
     action: "reveal",
     changed_by: profile.id,
+    source: "web",
   });
+  if (auditError) {
+    console.error("banking reveal: audit log write failed", auditError);
+    return { error: "Couldn't record this view, so the details were not shown" };
+  }
 
   return {
     data: {

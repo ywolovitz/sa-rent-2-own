@@ -35,7 +35,7 @@ export async function createStaffUser(raw: unknown): Promise<ActionResult> {
   // so there's no SMS/WhatsApp OTP step: the number is marked confirmed up
   // front and the account can log in with number + password straight away.
   // (Once OTP delivery is live, /setup-account still works for resets.)
-  const { error: createError } = await admin.auth.admin.createUser({
+  const { data: created, error: createError } = await admin.auth.admin.createUser({
     phone,
     password: parsed.data.password,
     phone_confirm: true,
@@ -49,6 +49,17 @@ export async function createStaffUser(raw: unknown): Promise<ActionResult> {
         : "Couldn't create the account",
     };
   }
+
+  // The profile row is created by a database trigger with no signed-in user behind it, so record
+  // who created the account explicitly.
+  await admin.from("audit_log").insert({
+    table_name: "profiles",
+    record_id: created.user?.id ?? null,
+    action: "insert",
+    changed_by: profile.id,
+    source: "web",
+    diff: { full_name: parsed.data.fullName, phone, role: parsed.data.role },
+  });
 
   revalidatePath("/admin/users");
   return {};
@@ -175,6 +186,16 @@ const AUDIT_TABLE_LABELS: Record<string, string> = {
   contracts: "contract",
   client_banking_details: "client banking details",
   vehicle_costs: "vehicle cost",
+  vehicles: "vehicle",
+  clients: "client",
+  vehicle_registrations: "vehicle registration",
+  contract_vehicle_assignments: "contract vehicle assignment",
+  rental_payment_periods: "rental payment period",
+  payment_transactions: "payment",
+  vehicle_assignments: "vehicle assignment",
+  insurance_claims: "insurance claim",
+  sale_listings: "sale listing",
+  profiles: "user",
 };
 
 const AUDIT_ACTION_LABELS: Record<string, string> = {

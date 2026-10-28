@@ -31,4 +31,6 @@ export interface VehicleCost {
   work_done: string | null;
   notes: string | null;
   source: "web" | "whatsapp";
+  /** Name of the person who logged it; null for older entries with no recorded user. */
+  recorded_by_name: string | null;
 }

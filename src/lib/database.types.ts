@@ -523,6 +523,7 @@ export interface Database {
           action: AuditAction;
           changed_by: string | null;
           diff: Json | null;
+          source: string | null;
           created_at: string;
         };
         Insert: {
@@ -532,6 +533,7 @@ export interface Database {
           action: AuditAction;
           changed_by?: string | null;
           diff?: Json | null;
+          source?: string | null;
           created_at?: string;
         };
         Update: Partial<Database["public"]["Tables"]["audit_log"]["Insert"]>;
@@ -595,6 +597,21 @@ export interface Database {
       };
     };
     Functions: {
+      whatsapp_save_service: {
+        Args: {
+          p_user: string;
+          p_vehicle: string;
+          p_cost_date: string;
+          p_supplier: string;
+          p_amount: number;
+          p_mileage: number;
+          p_work_done: string | null;
+          p_invoice: string | null;
+          p_next_km: number;
+          p_next_date: string;
+        };
+        Returns: undefined;
+      };
       current_user_role: {
         Args: Record<string, never>;
         Returns: UserRole;

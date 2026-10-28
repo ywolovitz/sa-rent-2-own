@@ -18,12 +18,24 @@ export async function listVehicleCosts(
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase
     .from("vehicle_costs")
-    .select("id, cost_type, cost_date, supplier, amount, mileage_at_time, invoice_file_path, work_done, notes, source")
+    .select("id, cost_type, cost_date, supplier, amount, mileage_at_time, invoice_file_path, work_done, notes, source, recorded_by")
     .eq("vehicle_id", vehicleId)
     .order("cost_date", { ascending: false });
 
   if (error) return { error: "Couldn't load cost history" };
-  return { data: data ?? [] };
+
+  const ids = [...new Set((data ?? []).map((c) => c.recorded_by).filter((id): id is string => !!id))];
+  const { data: people } = ids.length
+    ? await supabase.from("profiles").select("id, full_name").in("id", ids)
+    : { data: [] };
+  const names = new Map((people ?? []).map((p) => [p.id, p.full_name]));
+
+  return {
+    data: (data ?? []).map(({ recorded_by, ...cost }) => ({
+      ...cost,
+      recorded_by_name: recorded_by ? (names.get(recorded_by) ?? null) : null,
+    })),
+  };
 }
 
 export async function createVehicleCost(

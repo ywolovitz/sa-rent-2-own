@@ -163,7 +163,7 @@ Schema lives in `supabase/migrations/`, applied in filename order. `src/lib/data
 
 ### `audit_log`
 - `id`, `table_name`, `record_id`, `action`, `changed_by` fk → profiles, `diff` jsonb, `created_at`
-- Covers all writes to financially sensitive tables, plus explicit "viewed banking details" reveal events.
+- Covers every write to business data (vehicles, clients, contracts, banking, costs, payments, registrations, assignments, claims, sale listings, profiles) — migration `20261029100000`, applied to prod 2026-10-28 — plus explicit "viewed banking details" reveal events. `changed_by` is `auth.uid()` for anything done in the app; service-role writes name the person via transaction-local `app.acting_user` / `app.acting_source` (the WhatsApp save runs through `whatsapp_save_service()` and logs `source = whatsapp` against the sender's profile). `source` is `web`, `whatsapp` or `system` (imports/backfills/hand-run SQL have no user). Before this, banking reveals were never actually logged (the insert had no RLS policy and its error was ignored); they now go through the service role and fail closed. The cost table shows a "Logged by" column from `vehicle_costs.recorded_by`. WhatsApp optional questions send a tappable "No" quick-reply when `WHATSAPP_SKIP_CONTENT_SID` is set (`scripts/create-whatsapp-skip-button.mjs`).
 
 ### `vehicle_assignments`
 - `id`, `vehicle_id`, `technician_id` fk → profiles, `assigned_at`, `unassigned_at` (null = currently assigned)

@@ -58,8 +58,8 @@ const QUESTIONS: Record<Exclude<Step, "confirm">, string> = {
   next_date: "What's the next service date?",
   next_km: "What's the next service km?",
   amount: "What was the total cost of the service in rand? (e.g. 2450 or R2 450.50)",
-  work: "What exactly was done? (e.g. oil and filter change, brake pads) Or reply SKIP.",
-  invoice: 'Do you have a photo or copy of the invoice? Send it now (photo or PDF), or reply SKIP.',
+  work: "What exactly was done? (e.g. oil and filter change, brake pads) Type it, or tap No to skip.",
+  invoice: "Do you have a photo or copy of the invoice? Send it now (photo or PDF), or tap No to skip.",
 };
 
 const START_RE = /\b(add|log|record|capture|enter|new)\s+(a\s+|the\s+|new\s+)*service\b|^\s*service\s+done\b/i;
@@ -291,31 +291,23 @@ async function findCurrentVehicle(reg: string) {
 }
 
 async function saveService(user: FlowUser, d: Required<FlowData>): Promise<boolean> {
-  const db = createAdminClient();
-  // The cost row is the service history entry (same table the web app's cost log uses).
-  const { error } = await db.from("vehicle_costs").insert({
-    vehicle_id: d.vehicleId,
-    cost_type: "service",
-    cost_date: d.serviceDate,
-    supplier: d.place,
-    amount: d.amount,
-    invoice_file_path: d.invoicePath,
-    mileage_at_time: d.currentKm,
-    work_done: d.workDone,
-    source: "whatsapp",
-    recorded_by: user.id,
+  // One transaction (cost row + vehicle update), logged in audit_log against this person's profile
+  // with source "whatsapp" — see whatsapp_save_service in migration 20261029100000.
+  const { error } = await createAdminClient().rpc("whatsapp_save_service", {
+    p_user: user.id,
+    p_vehicle: d.vehicleId,
+    p_cost_date: d.serviceDate,
+    p_supplier: d.place,
+    p_amount: d.amount,
+    p_mileage: d.currentKm,
+    p_work_done: d.workDone,
+    p_invoice: d.invoicePath,
+    p_next_km: d.nextKm,
+    p_next_date: d.nextDate,
   });
   if (error) {
-    console.error("whatsapp add-service: cost insert failed", error);
+    console.error("whatsapp add-service: save failed", error);
     await discardInvoice(d.invoicePath);
-    return false;
-  }
-  const { error: vErr } = await db
-    .from("vehicles")
-    .update({ current_mileage: d.currentKm, next_service_km: d.nextKm, next_service_date: d.nextDate })
-    .eq("id", d.vehicleId);
-  if (vErr) {
-    console.error("whatsapp add-service: vehicle update failed", vErr);
     return false;
   }
   return true;
@@ -348,19 +340,30 @@ const summary = (d: Required<FlowData>) =>
  * Returns the reply if this message belongs to the add-service flow (starting
  * it or continuing it), or null to let the normal Q&A handle the message.
  */
+export interface FlowReply {
+  text: string;
+  /** The question is optional: send it with a tappable "No" button. */
+  skipButton: boolean;
+}
+
 export async function handleServiceFlow(
   phone: string,
   text: string,
   user: FlowUser,
   media: { url: string; contentType: string } | null = null
-): Promise<string | null> {
+): Promise<FlowReply | null> {
   // Fail soft: if the flow can't run (e.g. whatsapp_flows migration not applied yet),
   // normal Q&A keeps working and only "add a service" reports being unavailable.
   try {
-    return await runServiceFlow(phone, text, user, media);
+    const reply = await runServiceFlow(phone, text, user, media);
+    if (reply === null) return null;
+    const flow = await loadFlow(phone);
+    return { text: reply, skipButton: flow?.step === "work" || flow?.step === "invoice" };
   } catch (err) {
     console.error("whatsapp add-service flow failed", err);
-    return START_RE.test(text) ? "Adding a service isn't available right now. Please add it in the web app." : null;
+    return START_RE.test(text)
+      ? { text: "Adding a service isn't available right now. Please add it in the web app.", skipButton: false }
+      : null;
   }
 }
 
@@ -479,7 +482,7 @@ async function runServiceFlow(
         if (stored.error) return retry(stored.error);
         invoicePath = stored.path!;
       } else if (!SKIP_RE.test(text)) {
-        return retry("Send a photo or PDF of the invoice, or reply SKIP.");
+        return retry("Send a photo or PDF of the invoice, or reply No to skip.");
       }
       const full = { ...data, invoicePath };
       await saveFlow(phone, "confirm", full);

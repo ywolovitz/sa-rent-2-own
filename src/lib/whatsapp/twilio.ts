@@ -52,7 +52,11 @@ function chunk(text: string): string[] {
  * 15s webhook timeout. A reply inside the 24h window after the person's own
  * message needs no approved template, so this works before business approval.
  */
-export async function sendWhatsAppMessage(to: string, body: string): Promise<void> {
+export async function sendWhatsAppMessage(
+  to: string,
+  body: string,
+  options: { skipButton?: boolean } = {}
+): Promise<void> {
   const sid = process.env.TWILIO_ACCOUNT_SID;
   const token = process.env.TWILIO_AUTH_TOKEN;
   const from = process.env.TWILIO_WHATSAPP_FROM;
@@ -60,15 +64,29 @@ export async function sendWhatsAppMessage(to: string, body: string): Promise<voi
     throw new Error("Missing TWILIO_ACCOUNT_SID / TWILIO_AUTH_TOKEN / TWILIO_WHATSAPP_FROM");
   }
 
-  for (const part of chunk(body)) {
-    const res = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${sid}/Messages.json`, {
+  const post = (params: Record<string, string>) =>
+    fetch(`https://api.twilio.com/2010-04-01/Accounts/${sid}/Messages.json`, {
       method: "POST",
       headers: {
         Authorization: `Basic ${Buffer.from(`${sid}:${token}`).toString("base64")}`,
         "Content-Type": "application/x-www-form-urlencoded",
       },
-      body: new URLSearchParams({ To: to, From: from, Body: part }),
+      body: new URLSearchParams({ To: to, From: from, ...params }),
     });
+
+  // A quick-reply "No" button (a Twilio Content template with the question as {{1}}), for
+  // optional questions. Tapping it sends "No" as an ordinary message; typing an answer still
+  // works. Falls back to plain text if the template isn't configured or Twilio rejects it.
+  const buttonSid = process.env.WHATSAPP_SKIP_CONTENT_SID;
+  const parts = chunk(body);
+  const last = parts.length - 1;
+  for (const [i, part] of parts.entries()) {
+    if (options.skipButton && buttonSid && i === last) {
+      const res = await post({ ContentSid: buttonSid, ContentVariables: JSON.stringify({ "1": part }) });
+      if (res.ok) continue;
+      console.error("whatsapp: button message failed, sending plain text", res.status, (await res.text()).slice(0, 200));
+    }
+    const res = await post({ Body: part });
     if (!res.ok) {
       throw new Error(`Twilio send failed: ${res.status} ${(await res.text()).slice(0, 300)}`);
     }
