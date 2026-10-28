@@ -49,7 +49,8 @@ async function handleInbound(params: Record<string, string>) {
       ? await db
           .from("profiles")
           .select("id, full_name, role, is_active, whatsapp_enabled")
-          .eq("phone", phone)
+          // profiles.phone is stored without the leading "+" (27...), so accept both forms.
+          .in("phone", [phone, phone.replace(/^\+/, "")])
           .maybeSingle()
       : { data: null };
 
