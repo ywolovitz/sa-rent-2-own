@@ -28,7 +28,7 @@ const INVOICE_TYPES: Record<string, string> = {
   "image/webp": "webp",
 };
 
-type Step = "reg" | "service_date" | "place" | "current_km" | "next_date" | "next_km" | "amount" | "invoice" | "confirm";
+type Step = "reg" | "current_km" | "next_date" | "next_km" | "place" | "amount" | "work" | "invoice" | "confirm";
 
 interface FlowData {
   vehicleId?: string;
@@ -41,6 +41,7 @@ interface FlowData {
   nextDate?: string;
   nextKm?: number;
   amount?: number;
+  workDone?: string | null;
   invoicePath?: string | null;
 }
 
@@ -52,12 +53,12 @@ export interface FlowUser {
 
 const QUESTIONS: Record<Exclude<Step, "confirm">, string> = {
   reg: "What's the registration number of the vehicle?",
-  service_date: "What date was the service done? (e.g. 2026-10-27 or 27/10/2026)",
-  place: "Where was the service done? (workshop or dealer name)",
+  place: "Who did the service? (workshop or dealer name)",
   current_km: "What's the current odometer reading in km?",
   next_date: "What's the next service date?",
   next_km: "What's the next service km?",
   amount: "What was the total cost of the service in rand? (e.g. 2450 or R2 450.50)",
+  work: "What exactly was done? (e.g. oil and filter change, brake pads) Or reply SKIP.",
   invoice: 'Do you have a photo or copy of the invoice? Send it now (photo or PDF), or reply SKIP.',
 };
 
@@ -155,8 +156,8 @@ function sanitise(d: FlowData): { data: FlowData; dropped: string[] } {
   const data = { ...d };
   const dropped: string[] = [];
   if (data.serviceDate && validateServiceDate(data.serviceDate)) {
-    delete data.serviceDate;
-    dropped.push("service date");
+    data.serviceDate = todayZA();
+    dropped.push("service date (using today)");
   }
   if (data.currentKm != null && data.vehicleKm != null && data.currentKm < data.vehicleKm) {
     delete data.currentKm;
@@ -174,15 +175,19 @@ function sanitise(d: FlowData): { data: FlowData; dropped: string[] } {
   return { data, dropped };
 }
 
-/** First step that still needs an answer. The invoice is always asked (it needs a photo or SKIP). */
+/**
+ * First step that still needs an answer. Required: registration, current km, next service date and km,
+ * who did it, cost. Optional (SKIP-able, so always asked unless given): what was done, invoice.
+ * The service date is never asked — it defaults to the day the message is sent.
+ */
 function nextStep(d: FlowData): Step {
   if (!d.vehicleId) return "reg";
-  if (!d.serviceDate) return "service_date";
-  if (!d.place) return "place";
   if (d.currentKm == null) return "current_km";
   if (!d.nextDate) return "next_date";
   if (d.nextKm == null) return "next_km";
+  if (!d.place) return "place";
   if (d.amount == null) return "amount";
+  if (d.workDone === undefined) return "work";
   if (d.invoicePath === undefined) return "invoice";
   return "confirm";
 }
@@ -211,6 +216,7 @@ async function prefillFromMessage(text: string): Promise<{ data: FlowData; notes
   if (nextKm !== null) data.nextKm = nextKm;
   const amount = parsed.amount != null ? parseAmount(String(parsed.amount)) : null;
   if (amount !== null) data.amount = amount;
+  if (parsed.workDone && parsed.workDone.length <= 300) data.workDone = parsed.workDone;
 
   const clean = sanitise(data);
   if (clean.dropped.length) notes.push(`I couldn't use the ${clean.dropped.join(", ")} from your message.`);
@@ -220,12 +226,12 @@ async function prefillFromMessage(text: string): Promise<{ data: FlowData; notes
 const describeFilled = (d: FlowData) =>
   [
     d.reg && `Vehicle: ${d.reg} (${d.vehicle})`,
-    d.serviceDate && `Serviced: ${d.serviceDate}`,
-    d.place && `At: ${d.place}`,
+    d.place && `Done by: ${d.place}`,
     d.currentKm != null && `Current km: ${d.currentKm.toLocaleString("en-ZA")}`,
     d.nextDate && `Next service date: ${d.nextDate}`,
     d.nextKm != null && `Next service km: ${d.nextKm.toLocaleString("en-ZA")}`,
     d.amount != null && `Cost: ${formatRand(d.amount)}`,
+    d.workDone && `Work done: ${d.workDone}`,
   ]
     .filter(Boolean)
     .join("\n");
@@ -295,7 +301,7 @@ async function saveService(user: FlowUser, d: Required<FlowData>): Promise<boole
     amount: d.amount,
     invoice_file_path: d.invoicePath,
     mileage_at_time: d.currentKm,
-    notes: `Logged via WhatsApp by ${user.fullName}. Next service ${d.nextDate} / ${d.nextKm} km.`,
+    notes: [d.workDone, `Logged via WhatsApp by ${user.fullName}. Next service ${d.nextDate} / ${d.nextKm} km.`].filter(Boolean).join("\n"),
     recorded_by: user.id,
   });
   if (error) {
@@ -335,7 +341,7 @@ async function storeInvoice(vehicleId: string, media: { url: string; contentType
 // ---------- the conversation ----------
 
 const summary = (d: Required<FlowData>) =>
-  `${d.reg} (${d.vehicle})\nServiced: ${d.serviceDate} at ${d.place}\nCurrent km: ${d.currentKm!.toLocaleString("en-ZA")}\nNext service: ${d.nextDate} or ${d.nextKm.toLocaleString("en-ZA")} km\nCost: ${formatRand(d.amount)}\nInvoice: ${d.invoicePath ? "attached" : "none"}`;
+  `${d.reg} (${d.vehicle})\nServiced: ${d.serviceDate} by ${d.place}\nCurrent km: ${d.currentKm!.toLocaleString("en-ZA")}\nNext service: ${d.nextDate} or ${d.nextKm.toLocaleString("en-ZA")} km\nCost: ${formatRand(d.amount)}\nWork done: ${d.workDone ?? "not given"}\nInvoice: ${d.invoicePath ? "attached" : "none"}`;
 
 /**
  * Returns the reply if this message belongs to the add-service flow (starting
@@ -377,12 +383,15 @@ async function runServiceFlow(
     // Without the "add a service" wording, only take over if the message really carries several service fields.
     if (!explicit && (!prefill || Object.keys(prefill.data).length < 2)) return null;
     if (!prefill) {
-      await saveFlow(phone, "reg", {});
+      await saveFlow(phone, "reg", { serviceDate: todayZA() });
       return `${intro}\n\n${QUESTIONS.reg}`;
     }
-    const step = nextStep(prefill.data);
-    await saveFlow(phone, step, prefill.data);
-    const got = describeFilled(prefill.data);
+    // The service date defaults to the day the message is sent unless the message names one.
+    const { data: filled, dropped } = sanitise({ serviceDate: todayZA(), ...prefill.data });
+    if (dropped.length) prefill.notes.push(`I couldn't use the ${dropped.join(", ")} from your message.`);
+    const step = nextStep(filled);
+    await saveFlow(phone, step, filled);
+    const got = describeFilled(filled);
     return [
       got ? `${intro}\n\nFrom your message:\n${got}` : intro,
       ...prefill.notes,
@@ -423,19 +432,12 @@ async function runServiceFlow(
       // Keep anything already pre-filled from a free-text message, re-checked now the vehicle's km is known.
       const { data: kept, dropped } = sanitise({ ...data, vehicleId: v.id, reg, vehicle: v.label, vehicleKm: v.km });
       const note = dropped.length ? `(I couldn't use the ${dropped.join(", ")} you sent.)\n` : "";
-      return ask("service_date", kept, `Found ${reg} — ${v.label}.\n${note}`);
-    }
-    case "service_date": {
-      const iso = parseDate(text);
-      if (!iso) return retry("I couldn't read that date.");
-      const err = validateServiceDate(iso);
-      if (err) return retry(err);
-      return ask("place", { ...data, serviceDate: iso });
+      return ask("current_km", kept, `Found ${reg} — ${v.label}.\n${note}`);
     }
     case "place": {
       const place = text.replace(/\s+/g, " ").trim();
       if (place.length < 2 || place.length > 100) return retry("Please send the name of the workshop or dealer.");
-      return ask("current_km", { ...data, place });
+      return ask("amount", { ...data, place });
     }
     case "current_km": {
       const km = parseKm(text);
@@ -463,6 +465,11 @@ async function runServiceFlow(
       const amount = parseAmount(text);
       if (amount === null) return retry("I couldn't read that — send the cost in rand as a number, e.g. 2450.");
       return ask("invoice", { ...data, amount });
+    }
+    case "work": {
+      const work = text.replace(/\s+/g, " ").trim();
+      if (work.length > 300) return retry("That's a bit long — please keep it under 300 characters.");
+      return ask("invoice", { ...data, workDone: SKIP_RE.test(work) ? null : work });
     }
     case "invoice": {
       let invoicePath: string | null = null;

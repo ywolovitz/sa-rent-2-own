@@ -16,6 +16,7 @@ export interface ParsedService {
   nextDate?: string;
   nextKm?: number;
   amount?: number;
+  workDone?: string;
 }
 
 const TOOL: Anthropic.Tool = {
@@ -31,6 +32,7 @@ const TOOL: Anthropic.Tool = {
       current_km: { type: "number", description: "Odometer reading at the service, in km." },
       next_service_date: { type: "string", description: "Date the next service is due, as YYYY-MM-DD." },
       next_service_km: { type: "number", description: "Odometer reading the next service is due at, in km." },
+      work_done: { type: "string", description: "What was done in the service (e.g. oil and filter change, brake pads), as stated." },
       amount_rand: { type: "number", description: "Total cost of the service in rand." },
     },
   },
@@ -61,6 +63,7 @@ export async function parseServiceMessage(text: string): Promise<ParsedService |
       nextDate: str(i.next_service_date),
       nextKm: num(i.next_service_km),
       amount: num(i.amount_rand),
+      workDone: str(i.work_done),
     };
   } catch (err) {
     console.error("whatsapp add-service: message parsing failed", err);
