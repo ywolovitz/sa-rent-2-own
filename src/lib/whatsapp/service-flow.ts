@@ -496,5 +496,9 @@ async function runServiceFlow(
       await clearFlow(phone);
       return `Saved. Service recorded for ${data.reg} and the vehicle's mileage and next service details are updated.`;
     }
+    default:
+      // Saved by an older version of the script (a step that no longer exists): drop it and start over.
+      await clearFlow(phone);
+      return runServiceFlow(phone, text, user, media);
   }
 }
