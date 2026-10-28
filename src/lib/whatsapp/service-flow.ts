@@ -62,6 +62,14 @@ const QUESTIONS: Record<Exclude<Step, "confirm">, string> = {
 };
 
 const START_RE = /\b(add|log|record|capture|enter|new)\s+(a\s+|the\s+|new\s+)*service\b|^\s*service\s+done\b/i;
+/**
+ * A statement (not a question) that gives a km figure plus service wording, e.g.
+ * "DF49RC GP current 285000km Next 300 000km or 28.10.27". Treated as an
+ * add-service message only if the parser then finds real fields in it.
+ */
+const looksLikeServiceDetails = (t: string) =>
+  !t.includes("?") && /\d\s*km\b/i.test(t) && /\b(next|service[ds]?|current|odometer)\b/i.test(t);
+
 const CANCEL_RE = /^\s*(cancel|stop|quit|exit|abort|nevermind|never mind)\s*[.!]*\s*$/i;
 const YES_RE = /^\s*(yes|y|yep|yeah|confirm|ok|okay|correct|save)\s*[.!]*\s*$/i;
 const SKIP_RE = /^\s*(skip|no|none|n|nope|no invoice)\s*[.!]*\s*$/i;
@@ -154,11 +162,12 @@ function sanitise(d: FlowData): { data: FlowData; dropped: string[] } {
     delete data.currentKm;
     dropped.push("current km");
   }
-  if (data.nextDate && (!data.serviceDate || validateNextDate(data.nextDate, data.serviceDate))) {
+  // Dependent fields are only checked once what they depend on is known; they're re-checked as answers arrive.
+  if (data.nextDate && data.serviceDate && validateNextDate(data.nextDate, data.serviceDate)) {
     delete data.nextDate;
     dropped.push("next service date");
   }
-  if (data.nextKm != null && (data.currentKm == null || validateNextKm(data.nextKm, data.currentKm))) {
+  if (data.nextKm != null && (data.currentKm != null && validateNextKm(data.nextKm, data.currentKm))) {
     delete data.nextKm;
     dropped.push("next service km");
   }
@@ -357,13 +366,16 @@ async function runServiceFlow(
   const flow = await loadFlow(phone);
 
   if (!flow) {
-    if (!START_RE.test(text)) return null;
+    const explicit = START_RE.test(text);
+    if (!explicit && !looksLikeServiceDetails(text)) return null;
     if (!canEdit(user.role)) {
-      return "Only admins can add a service. Ask an admin, or add it in the web app.";
+      return explicit ? "Only admins can add a service. Ask an admin, or add it in the web app." : null;
     }
     const intro = `Let's add a service. Reply "cancel" at any time to stop.`;
     // A long message may already contain the details: pull them out, then only ask for what's missing.
-    const prefill = text.replace(START_RE, "").trim().length >= 8 ? await prefillFromMessage(text) : null;
+    const prefill = (explicit ? text.replace(START_RE, "").trim().length >= 8 : true) ? await prefillFromMessage(text) : null;
+    // Without the "add a service" wording, only take over if the message really carries several service fields.
+    if (!explicit && (!prefill || Object.keys(prefill.data).length < 2)) return null;
     if (!prefill) {
       await saveFlow(phone, "reg", {});
       return `${intro}\n\n${QUESTIONS.reg}`;
@@ -391,10 +403,12 @@ async function runServiceFlow(
 
   const { step, data } = flow;
   const ask = async (_next: Step, d: FlowData, prefix = "") => {
-    // Skips anything already pre-filled from a free-text message.
-    const next = nextStep(d);
-    await saveFlow(phone, next, d);
-    return `${prefix}${next === "confirm" ? "" : QUESTIONS[next]}`;
+    // Skips anything already pre-filled from a free-text message, re-checking it against the answer just given.
+    const { data: kept, dropped } = sanitise(d);
+    const next = nextStep(kept);
+    await saveFlow(phone, next, kept);
+    const note = dropped.length ? `(I couldn't use the ${dropped.join(", ")} you sent earlier.)\n` : "";
+    return `${prefix}${note}${next === "confirm" ? "" : QUESTIONS[next]}`;
   };
   const retry = (error: string) => `${error}\n${step === "confirm" ? "" : QUESTIONS[step]}`.trim();
 
