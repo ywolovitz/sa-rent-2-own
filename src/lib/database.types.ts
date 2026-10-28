@@ -261,7 +261,9 @@ export interface Database {
           amount: number;
           mileage_at_time: number | null;
           invoice_file_path: string | null;
+          work_done: string | null;
           notes: string | null;
+          source: "web" | "whatsapp";
           recorded_by: string | null;
           created_at: string;
         };
@@ -274,7 +276,9 @@ export interface Database {
           amount: number;
           mileage_at_time?: number | null;
           invoice_file_path?: string | null;
+          work_done?: string | null;
           notes?: string | null;
+          source?: "web" | "whatsapp";
           recorded_by?: string | null;
           created_at?: string;
         };

@@ -18,7 +18,7 @@ export async function listVehicleCosts(
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase
     .from("vehicle_costs")
-    .select("id, cost_type, cost_date, supplier, amount, mileage_at_time, invoice_file_path, notes")
+    .select("id, cost_type, cost_date, supplier, amount, mileage_at_time, invoice_file_path, work_done, notes, source")
     .eq("vehicle_id", vehicleId)
     .order("cost_date", { ascending: false });
 
@@ -39,6 +39,7 @@ export async function createVehicleCost(
     supplier: formData.get("supplier") || undefined,
     amount: formData.get("amount"),
     mileageAtTime: formData.get("mileageAtTime") || undefined,
+    workDone: formData.get("workDone") || undefined,
     notes: formData.get("notes") || undefined,
   });
   if (!parsed.success) {
@@ -74,6 +75,7 @@ export async function createVehicleCost(
     amount,
     mileage_at_time: values.mileageAtTime ? Number(values.mileageAtTime) : null,
     invoice_file_path: invoiceFilePath,
+    work_done: values.workDone || null,
     notes: values.notes || null,
     recorded_by: profile.id,
   });

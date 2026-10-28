@@ -301,7 +301,8 @@ async function saveService(user: FlowUser, d: Required<FlowData>): Promise<boole
     amount: d.amount,
     invoice_file_path: d.invoicePath,
     mileage_at_time: d.currentKm,
-    notes: [d.workDone, `Logged via WhatsApp by ${user.fullName}. Next service ${d.nextDate} / ${d.nextKm} km.`].filter(Boolean).join("\n"),
+    work_done: d.workDone,
+    source: "whatsapp",
     recorded_by: user.id,
   });
   if (error) {

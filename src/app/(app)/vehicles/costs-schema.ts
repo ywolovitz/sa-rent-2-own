@@ -14,6 +14,7 @@ export const vehicleCostFormSchema = z.object({
   supplier: z.string().optional(),
   amount: z.string().min(1, "Amount is required"),
   mileageAtTime: z.string().optional(),
+  workDone: z.string().optional(),
   notes: z.string().optional(),
 });
 
@@ -27,5 +28,7 @@ export interface VehicleCost {
   amount: number;
   mileage_at_time: number | null;
   invoice_file_path: string | null;
+  work_done: string | null;
   notes: string | null;
+  source: "web" | "whatsapp";
 }
