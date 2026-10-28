@@ -12,3 +12,21 @@ export const newStaffFormSchema = z.object({
 });
 
 export type NewStaffFormValues = z.infer<typeof newStaffFormSchema>;
+
+export const editStaffFormSchema = z.object({
+  firstName: z.string().trim().min(1, "Name is required"),
+  surname: z.string().trim(),
+  phone: z.string().min(1, "Cell number is required"),
+  role: z.enum(["admin", "manager", "technician"]),
+  whatsappEnabled: z.boolean(),
+});
+
+export type EditStaffFormValues = z.infer<typeof editStaffFormSchema>;
+
+/** profiles only stores `full_name`; the form splits it on the first space. */
+export function splitFullName(fullName: string): { firstName: string; surname: string } {
+  const trimmed = fullName.trim();
+  const index = trimmed.indexOf(" ");
+  if (index === -1) return { firstName: trimmed, surname: "" };
+  return { firstName: trimmed.slice(0, index), surname: trimmed.slice(index + 1).trim() };
+}

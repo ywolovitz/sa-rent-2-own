@@ -2,8 +2,7 @@ import { redirect } from "next/navigation";
 
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/auth/current-profile";
-import { canEdit, ROLE_LABELS } from "@/lib/auth/permissions";
-import { Badge } from "@/components/ui/badge";
+import { canEdit } from "@/lib/auth/permissions";
 import {
   Table,
   TableBody,
@@ -12,9 +11,9 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { formatSaPhoneForDisplay } from "@/lib/phone";
 
 import { NewStaffDialog } from "./new-staff-dialog";
+import { StaffRow } from "./staff-row";
 import { StaffActiveToggle } from "./staff-active-toggle";
 import { StaffWhatsAppToggle } from "./staff-whatsapp-toggle";
 
@@ -53,30 +52,23 @@ export default async function StaffPage() {
           </TableHeader>
           <TableBody>
             {(staff ?? []).map((member) => (
-              <TableRow key={member.id}>
-                <TableCell className="font-medium">{member.full_name}</TableCell>
-                <TableCell>{formatSaPhoneForDisplay(member.phone)}</TableCell>
-                <TableCell>
-                  <Badge variant="outline">{ROLE_LABELS[member.role]}</Badge>
-                </TableCell>
-                <TableCell>
-                  <Badge variant={member.is_active ? "success" : "secondary"}>
-                    {member.is_active ? "Active" : "Deactivated"}
-                  </Badge>
-                </TableCell>
-                <TableCell>
+              <StaffRow
+                key={member.id}
+                member={member}
+                isSelf={member.id === profile.id}
+                whatsapp={
                   <StaffWhatsAppToggle
                     userId={member.id}
                     enabled={member.whatsapp_enabled}
                     disabled={!member.is_active || member.role === "technician"}
                   />
-                </TableCell>
-                <TableCell className="text-right">
-                  {member.id !== profile.id && (
+                }
+                actions={
+                  member.id !== profile.id && (
                     <StaffActiveToggle userId={member.id} isActive={member.is_active} />
-                  )}
-                </TableCell>
-              </TableRow>
+                  )
+                }
+              />
             ))}
             {(staff ?? []).length === 0 && (
               <TableRow>
