@@ -59,6 +59,7 @@ export interface Database {
           email: string | null;
           role: UserRole;
           is_active: boolean;
+          whatsapp_enabled: boolean;
           created_at: string;
           updated_at: string;
         };
@@ -69,6 +70,7 @@ export interface Database {
           email?: string | null;
           role?: UserRole;
           is_active?: boolean;
+          whatsapp_enabled?: boolean;
           created_at?: string;
           updated_at?: string;
         };
@@ -529,6 +531,30 @@ export interface Database {
           created_at?: string;
         };
         Update: Partial<Database["public"]["Tables"]["audit_log"]["Insert"]>;
+        Relationships: [];
+      };
+      whatsapp_messages: {
+        Row: {
+          id: string;
+          phone: string;
+          profile_id: string | null;
+          direction: "in" | "out";
+          status: string;
+          body: string;
+          twilio_sid: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          phone: string;
+          profile_id?: string | null;
+          direction: "in" | "out";
+          status: string;
+          body: string;
+          twilio_sid?: string | null;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["whatsapp_messages"]["Insert"]>;
         Relationships: [];
       };
     };

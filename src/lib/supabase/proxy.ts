@@ -4,7 +4,9 @@ import { NextResponse, type NextRequest } from "next/server";
 import { getSupabaseAnonKey, getSupabaseUrl } from "./env";
 import { VERIFIED_USER_ID_HEADER } from "./verified-user-header";
 
-const PUBLIC_PATHS = ["/login", "/setup-account"];
+// /api/whatsapp is called by Twilio, not a browser: it has no session, and
+// the route authenticates every request itself (Twilio signature check).
+const PUBLIC_PATHS = ["/login", "/setup-account", "/api/whatsapp"];
 
 /**
  * Refreshes the Supabase session on every request and gates access to

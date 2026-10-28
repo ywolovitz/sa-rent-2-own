@@ -16,6 +16,7 @@ import { formatSaPhoneForDisplay } from "@/lib/phone";
 
 import { NewStaffDialog } from "./new-staff-dialog";
 import { StaffActiveToggle } from "./staff-active-toggle";
+import { StaffWhatsAppToggle } from "./staff-whatsapp-toggle";
 
 export default async function StaffPage() {
   const profile = await getCurrentProfile();
@@ -26,7 +27,7 @@ export default async function StaffPage() {
   const supabase = await createClient();
   const { data: staff } = await supabase
     .from("profiles")
-    .select("id, full_name, phone, role, is_active")
+    .select("id, full_name, phone, role, is_active, whatsapp_enabled")
     .order("full_name");
 
   return (
@@ -46,6 +47,7 @@ export default async function StaffPage() {
               <TableHead>Cell number</TableHead>
               <TableHead>Role</TableHead>
               <TableHead>Status</TableHead>
+              <TableHead>WhatsApp bot</TableHead>
               <TableHead className="w-32" />
             </TableRow>
           </TableHeader>
@@ -62,6 +64,13 @@ export default async function StaffPage() {
                     {member.is_active ? "Active" : "Deactivated"}
                   </Badge>
                 </TableCell>
+                <TableCell>
+                  <StaffWhatsAppToggle
+                    userId={member.id}
+                    enabled={member.whatsapp_enabled}
+                    disabled={!member.is_active || member.role === "technician"}
+                  />
+                </TableCell>
                 <TableCell className="text-right">
                   {member.id !== profile.id && (
                     <StaffActiveToggle userId={member.id} isActive={member.is_active} />
@@ -71,7 +80,7 @@ export default async function StaffPage() {
             ))}
             {(staff ?? []).length === 0 && (
               <TableRow>
-                <TableCell colSpan={5} className="text-muted-foreground text-center py-8">
+                <TableCell colSpan={6} className="text-muted-foreground text-center py-8">
                   No users yet.
                 </TableCell>
               </TableRow>

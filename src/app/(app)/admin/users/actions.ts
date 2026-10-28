@@ -73,3 +73,23 @@ export async function setStaffActive(userId: string, isActive: boolean): Promise
   revalidatePath("/admin/users");
   return {};
 }
+
+export async function setStaffWhatsAppAccess(userId: string, enabled: boolean): Promise<ActionResult> {
+  const profile = await getCurrentProfile();
+  if (!profile || !canEdit(profile.role)) {
+    return { error: "Not authorized" };
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("profiles")
+    .update({ whatsapp_enabled: enabled })
+    .eq("id", userId);
+
+  if (error) {
+    return { error: "Couldn't update WhatsApp access" };
+  }
+
+  revalidatePath("/admin/users");
+  return {};
+}
