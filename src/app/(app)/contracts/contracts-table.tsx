@@ -340,7 +340,7 @@ export function ContractsTable({
                 </TableCell>
                 <TableCell>
                   {row.arrears_amount > 0 ? (
-                    <Badge variant="destructive">R{row.arrears_amount.toLocaleString()}</Badge>
+                    <Badge variant="destructive">R{Math.round(row.arrears_amount).toLocaleString()}</Badge>
                   ) : (
                     "—"
                   )}
@@ -403,7 +403,7 @@ export function ContractsTable({
                 <TableCell>
                   {row.installment_amount ? `R${row.installment_amount.toLocaleString()}` : "—"}
                 </TableCell>
-                <TableCell>{row.arrears_amount > 0 ? `R${row.arrears_amount.toLocaleString()}` : "—"}</TableCell>
+                <TableCell>{row.arrears_amount > 0 ? `R${Math.round(row.arrears_amount).toLocaleString()}` : "—"}</TableCell>
                 <TableCell>{formatDisplayDate(row.end_date)}</TableCell>
               </TableRow>
             ))}
