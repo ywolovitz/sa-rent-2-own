@@ -269,6 +269,8 @@ export function ClientPanel({
               />
             </section>
 
+            <Separator />
+
             <section className="grid gap-4 sm:grid-cols-2">
               <div className="col-span-full flex items-center justify-between">
                 <h3 className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">
